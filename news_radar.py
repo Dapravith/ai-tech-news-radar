@@ -302,7 +302,7 @@ def render_news_report(
         if run_id.isdecimal():
             header.append(f'<b>Run record:</b> <code>{run_id}</code>')
         if test_mode:
-            header.append('🧪 <i>TEST REPORT — previously reported stories may appear</i>')
+            header.append('🧪 <i>TEST RUN — previously reported stories may appear</i>')
         if partial:
             header.append('⚠️ <i>Partial feed coverage — some sources unavailable</i>')
 
