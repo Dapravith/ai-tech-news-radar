@@ -164,3 +164,20 @@ Current news channel: [@MyAITechRadar](https://t.me/MyAITechRadar).
 5. If the Telegram Bot API denies the message, check the bot's channel admin **Post Messages** right and confirm the channel username. A failed delivery does not mark articles as seen; the GitHub Actions failure job notifies the private chat, if available.
 
 To change the news channel later, edit the workflow's `TELEGRAM_CHANNEL_ID` setting. To disable channel publishing, set it to an empty string and news delivery will fall back to the private chat. This is a cloud-scheduled collector, not a continuously online Telegram command-processing bot.
+
+
+## 12. Daily Trending Intelligence — 09:00 Cambodia (ICT)
+
+A new, separate [Daily Trending Intelligence workflow](.github/workflows/daily-trending.yml) publishes up to **seven trending-news headlines** to [@MyAITechRadar](https://t.me/MyAITechRadar) each morning at **09:00 Asia/Phnom_Penh (UTC+07:00)**, subject to GitHub scheduling delays. The collector is [trending_radar.py](trending_radar.py). It does not require a VPS, MacBook, browser automation, social-media logins, or paid API keys.
+
+**Categories:** World, Cambodia, Technology, Business, Science, Sports, Culture. Feeds are official public BBC RSS, GitHub Blog RSS, and Google News topic/search RSS. Google News can link to aggregator pages rather than publisher originals; its RSS descriptions are not treated as independently verified article summaries. Feed timestamps come from source metadata.
+
+**Trending relevance heuristic:** 40 points freshness, 25 headline-significance indicators, 15 source trust, and 10 Cambodia relevance. One item from each available category is selected before filling any remaining positions; near-identical titles and normalized URLs are deduplicated. This ranks **editorial newsworthiness**, not measured social engagement or guaranteed virality. TikTok, X, Facebook, Instagram, YouTube and Ego Lite browser collection are not included because the current deployment lacks suitable authorized APIs or an always-on browser host.
+
+**No 09:00 overlap:** The existing technical news workflow has removed its 09:00 ICT slot and retains **12:00, 15:00, 18:00, 21:00, 00:00, 03:00 and 06:00 ICT**. Other technical operations are unchanged.
+
+**Delivery-state handling:** Separate `state/trending_seen.json` records article hashes after the Telegram channel accepts the report. The workflow persists state to main with conflict retries, and it also checks URLs already recorded in the original `state/seen.json`. Exact-once delivery cannot be guaranteed because Git commits and Telegram sends are separate transactions. Empty production briefings are not sent. Source outages degrade coverage; all-feed failures trigger a private operational alert via the existing `TELEGRAM_CHAT_ID` secret.
+
+**Safe verification:** Pull requests run all offline tests and also `python trending_radar.py --dry-run --test-mode` to fetch real public feeds and render a preview **without sending Telegram messages**. Production publishing runs only for the daily schedule or explicit manual dispatch, **not** immediately after merging. For a voluntary channel test, open GitHub Actions → Daily Trending Intelligence → Run workflow, with `test_mode: true`; this posts a public **TEST RUN** and does not mark stories delivered. Avoid repeated manual tests on a public channel. To reproduce an unsent preview locally: `python trending_radar.py --dry-run --test-mode`.
+
+Note: Scheduled GitHub jobs can start late or occasionally be omitted, and news sources may be unavailable.
