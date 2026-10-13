@@ -3,9 +3,9 @@ name: AI Tech Radar - Every 3 Hours
 
 on:
   schedule:
-    # Every 3 hours, beginning at 09:00 Cambodia time (UTC+7)
-    # Cambodia: 09, 12, 15, 18, 21, 00, 03, 06
-    - cron: "0 2,5,8,11,14,17,20,23 * * *"
+    # Every 3 hours except 09:00 Cambodia (reserved for daily trending)
+    # Cambodia: 12, 15, 18, 21, 00, 03, 06
+    - cron: "0 5,8,11,14,17,20,23 * * *"
 
   push:
     branches: [main]
