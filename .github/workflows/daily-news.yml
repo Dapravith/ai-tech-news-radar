@@ -7,6 +7,12 @@ on:
     # Cambodia: 09, 12, 15, 18, 21, 00, 03, 06
     - cron: "0 2,5,8,11,14,17,20,23 * * *"
 
+  pull_request:
+    paths:
+      - 'news_radar.py'
+      - 'tests/**'
+      - '.github/workflows/daily-news.yml'
+
   workflow_dispatch:
     inputs:
       test_mode:
@@ -16,14 +22,27 @@ on:
         default: true
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ai-tech-radar
   cancel-in-progress: false
 
 jobs:
+  unit-tests:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests -v
+
   news:
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: write
     name: Collect, Filter and Notify
     runs-on: ubuntu-latest
     timeout-minutes: 15
