@@ -271,24 +271,91 @@ def fallback_summary(item: dict) -> str:
     return f"Reported by {item['source']}; open the original article for details."
 
 
+def report_timestamp(value: datetime | None) -> str:
+    """Display publication and collection records in Cambodia local time."""
+    if not isinstance(value, datetime):
+        return 'Not provided by source'
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(TZ_KH).strftime('%Y-%m-%d %H:%M:%S ICT')
+
+
+def render_news_report(
+    items: list[dict], now: datetime, test_mode: bool, partial: bool,
+) -> tuple[str, list[dict]]:
+    """Return Telegram-safe HTML and exactly the articles included in it.
+
+    Reserve space for references instead of truncating markup or source URLs.
+    Telegram's 4096-character cap applies after HTML entity parsing; a
+    conservative 3800-character raw HTML budget avoids ambiguity.
+    """
+    for count in range(min(5, len(items)), -1, -1):
+        included = items[:count]
+        issued = report_timestamp(now)
+        run_id = os.getenv('GITHUB_RUN_ID', '')
+        header = [
+            '🗞 <b>AI & TECH RADAR</b>',
+            '<b>Intelligence briefing</b> · Every 3 hours',
+            f'<b>Issued:</b> <code>{issued}</code> (UTC+07:00)',
+            f'<b>Stories:</b> {len(included)}',
+        ]
+        if run_id.isdecimal():
+            header.append(f'<b>Run record:</b> <code>{run_id}</code>')
+        if test_mode:
+            header.append('🧪 <i>TEST REPORT — previously reported stories may appear</i>')
+        if partial:
+            header.append('⚠️ <i>Partial feed coverage — some sources unavailable</i>')
+
+        story_lines = []
+        references = []
+        for idx, item in enumerate(included, start=1):
+            original_url = normalize_url(str(item.get('url') or ''))
+            if not original_url:
+                raise ValueError('Selected article has an invalid reference URL')
+            title = html.escape(clean(str(item.get('title') or ''), 105), quote=False)
+            source = html.escape(clean(str(item.get('source') or 'Unknown source'), 50), quote=False)
+            brief = html.escape(
+                shorten_sentence(item.get('ai_summary') or fallback_summary(item), 145),
+                quote=False,
+            )
+            published = report_timestamp(item.get('published'))
+            story_lines.extend([
+                '',
+                f'<b>{idx:02d} | {title}</b>',
+                brief,
+                f'🕒 <b>Published (feed):</b> {published}',
+                f'🏷 <b>Source:</b> {source} · <b>Ref:</b> [{idx}]',
+            ])
+            link = html.escape(original_url, quote=True)
+            references.append(
+                f'[{idx}] <a href="{link}">{source} · Original article ↗</a>'
+            )
+
+        if references:
+            story_lines.extend(['', '📚 <b>REFERENCES</b>', *references])
+        else:
+            story_lines.extend(['', 'No qualifying headlines in this test window.'])
+        footer = [
+            '',
+            '<i>All timestamps: Cambodia ICT (UTC+07:00). '
+            'Publication times come from source-feed metadata.</i>',
+        ]
+        message = '\n'.join([*header, *story_lines, *footer])
+        if len(message) <= 3800:
+            return message, included
+        if count == 1:
+            raise ValueError('A single original reference URL exceeds Telegram message limit')
+    raise ValueError('Unable to format Telegram briefing')
+
+
 def build_message(items: list[dict], now: datetime, test_mode: bool, partial: bool) -> str:
-    date = now.astimezone(TZ_KH).strftime('%d %b %Y')
-    lines = [f"🧠 AI & TECH RADAR | {date}"]
-    if test_mode:
-        lines.append('🧪 TEST RUN (may include previously reported stories)')
-    if partial:
-        lines.append('⚠️ Partial feed coverage today')
-    if not items:
-        lines.append('📰 No new significant verified feed headlines in the monitored period.')
-    for ix, item in enumerate(items[:5], start=1):
-        title = item['title'][:115]
-        summary = shorten_sentence(item.get('ai_summary') or fallback_summary(item), 150)
-        lines.extend(['', f'{ix}. {title}', summary, f"🔗 {item['url']}"])
-    return '\n'.join(lines)[:3990]
+    """Backward-compatible formatter used by unit tests and dry runs."""
+    return render_news_report(items, now, test_mode, partial)[0]
 
 
 def send_telegram(message: str, token: str, chat_id: str) -> None:
-    data = json.dumps({'chat_id': chat_id, 'text': message, 'disable_web_page_preview': True}).encode('utf-8')
+    data = json.dumps({'chat_id': chat_id, 'text': message, 'parse_mode': 'HTML',
+                       'disable_web_page_preview': True}).encode('utf-8')
     url = f'https://api.telegram.org/bot{token}/sendMessage'
     req = Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
     try:
@@ -336,7 +403,7 @@ def main() -> int:
     if not selected and not args.test_mode:
         logging.info('AI returned no usable articles; skipping Telegram')
         return 0
-    message = build_message(selected, now, args.test_mode, bool(errors))
+    message, selected = render_news_report(selected, now, args.test_mode, bool(errors))
     OUTPUT_DIR.mkdir(exist_ok=True)
     (OUTPUT_DIR / 'latest.txt').write_text(message + '\n', encoding='utf-8')
     # Keep GitHub log and Actions summary informative, but never print secrets.
