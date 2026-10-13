@@ -120,3 +120,35 @@ For a future always-on Hermes, install Hermes CLI on a Linux VM and use its buil
 - Free OpenRouter models are best effort: malformed, non-JSON or empty responses fall back to source-provided summaries. No paid fallback model is configured.
 - GitHub scheduled runs can arrive late or occasionally be skipped. A true external missed-run watchdog and a continuously running Hermes Agent require separate infrastructure.
 - After production delivery, check `state/seen.json` and run production mode again to test suppression. Duplicate prevention is best-effort because Telegram `sendMessage` has no atomic transaction with the Git state commit.
+
+## 10. Professional Telegram briefing format
+
+Every delivered Telegram news report uses Telegram's supported HTML formatting: bold section headers, an exact report timestamp, an optional GitHub Actions run ID, story-by-story publication times, and a numbered **REFERENCES** section with clickable original-source URLs. All displayed timestamps are in Cambodia **ICT (UTC+07:00)**. The article publication time comes from the RSS/Atom feed metadata and is not an independently verified event timestamp.
+
+Example format (illustrative, not current news):
+
+```text
+🗞 AI & TECH RADAR
+Intelligence briefing · Every 3 hours
+Issued: 2026-10-13 15:52:00 ICT (UTC+07:00)
+Stories: 2
+Run record: 38346920698
+
+01 | Example AI development
+Short editorial summary or source snippet.
+Published (feed): 2026-10-13 14:10:00 ICT
+Source: Example Tech Blog · Ref: [1]
+
+02 | Example DevOps release
+Short explanation of the change.
+Published (feed): 2026-10-13 13:40:00 ICT
+Source: Example Cloud Blog · Ref: [2]
+
+REFERENCES
+[1] Example Tech Blog · Original article ↗
+[2] Example Cloud Blog · Original article ↗
+
+All timestamps: Cambodia ICT (UTC+07:00).
+```
+
+Source titles, descriptions, and URLs are HTML-escaped before insertion into Telegram messages. A conservative message budget avoids cutting HTML tags and citations. If an unusually long original URL forces the formatter to include fewer articles, **only articles actually included in the sent report** are marked delivered in `state/seen.json`.

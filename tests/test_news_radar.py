@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 import news_radar
-from news_radar import clean, normalize_url, parse_feed, score, select_items, build_message, parse_ai_response, ai_summarize, send_telegram
+from news_radar import clean, normalize_url, parse_feed, score, select_items, build_message, render_news_report, parse_ai_response, ai_summarize, send_telegram
 
 RSS = b'''<?xml version="1.0"?><rss version="2.0"><channel><title>News</title><item><title>New Kubernetes release</title><link>https://example.org/k8s?utm_source=rss</link><pubDate>Tue, 13 Oct 2026 02:00:00 GMT</pubDate><description>Cloud deployment improvements for developers.</description></item></channel></rss>'''
 ATOM = b'''<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><entry><title>New AI agent model</title><link href="https://example.org/agent"/><updated>2026-10-13T02:00:00Z</updated><summary>Model update.</summary></entry></feed>'''
@@ -148,6 +148,78 @@ class NewsRadarTest(unittest.TestCase):
               patch.object(sys, 'argv', ['news_radar.py'])):
             self.assertEqual(news_radar.main(), 1)
             notify.assert_not_called()
+
+
+    def test_editorial_report_has_sources_and_precise_local_times(self):
+        now = datetime(2026, 10, 13, 5, 2, 9, tzinfo=timezone.utc)
+        entry = parse_feed(ATOM, 'Google AI Blog')[0]
+        with patch.dict(os.environ, {'GITHUB_RUN_ID': '38346920698'}):
+            report = build_message([entry], now, False, False)
+        self.assertIn('<b>Intelligence briefing</b>', report)
+        self.assertIn('2026-10-13 12:02:09 ICT', report)
+        self.assertIn('2026-10-13 09:00:00 ICT', report)
+        self.assertIn('<b>REFERENCES</b>', report)
+        self.assertIn('<a href="https://example.org/agent">', report)
+        self.assertIn('Run record:</b> <code>38346920698</code>', report)
+        self.assertIn('Publication times come from source-feed metadata', report)
+
+    def test_editorial_report_escapes_untrusted_text_and_link(self):
+        now = datetime(2026, 10, 13, 5, tzinfo=timezone.utc)
+        entry = parse_feed(ATOM, 'AI & Research')[0]
+        entry['title'] = 'R&D & DevOps <b>Release</b>'
+        entry['summary'] = '<i>New</i> & improved developer APIs'
+        entry['url'] = 'https://example.org/agent?q=ai&category=cloud'
+        message = build_message([entry], now, False, False)
+        self.assertIn('R&amp;D &amp; DevOps Release', message)
+        self.assertIn('New &amp; improved developer APIs', message)
+        self.assertIn('AI &amp; Research', message)
+        self.assertIn('href="https://example.org/agent?q=ai&amp;category=cloud"', message)
+        self.assertNotIn('<b>Release</b>', message)
+
+    def test_long_original_references_do_not_break_html_or_state(self):
+        now = datetime.now(timezone.utc)
+        headlines = [
+            'Major Kubernetes API update',
+            'FastAPI typed validation release',
+            'PostgreSQL storage performance analysis',
+            'Next.js authentication security advisory',
+            'Docker cloud observability improvements',
+        ]
+        articles = [
+            {'title': title, 'url': 'https://example.org/' + 'p' * 1100 + str(n),
+             'published': now, 'source': 'Kubernetes Blog', 'summary': 'Cloud improvement'}
+            for n, title in enumerate(headlines)
+        ]
+        message, displayed = render_news_report(articles, now, False, False)
+        self.assertLessEqual(len(message), 3800)
+        self.assertTrue(1 <= len(displayed) < len(articles))
+        self.assertEqual(message.count('<a href='), len(displayed))
+        self.assertEqual(message.count('</a>'), len(displayed))
+        with (tempfile.TemporaryDirectory() as folder,
+              patch('news_radar.FEEDS', {'Working': 'https://example.org/feed'}),
+              patch('news_radar.fetch_feed', return_value=articles),
+              patch('news_radar.STATE_FILE', Path(folder) / 'seen.json'),
+              patch('news_radar.OUTPUT_DIR', Path(folder) / 'out'),
+              patch('news_radar.send_telegram') as notify,
+              patch.dict(os.environ, {'TELEGRAM_BOT_TOKEN': 'dummy',
+                                      'TELEGRAM_CHAT_ID': '123', 'OPENROUTER_API_KEY': ''}),
+              patch.object(sys, 'argv', ['news_radar.py'])):
+            self.assertEqual(news_radar.main(), 0)
+            delivered = json.loads((Path(folder) / 'seen.json').read_text())
+            self.assertEqual(len(delivered), len(displayed))
+            self.assertEqual(notify.call_count, 1)
+
+    def test_report_timezone_crosses_utc_day_boundary(self):
+        now = datetime(2026, 10, 13, 23, 45, 58, tzinfo=timezone.utc)
+        self.assertIn('2026-10-14 06:45:58 ICT', build_message([], now, True, False))
+
+    def test_telegram_html_parse_mode_is_enabled(self):
+        with patch('news_radar.urlopen', return_value=io.BytesIO(b'{"ok":true}')) as mock_send:
+            send_telegram('<b>Report</b>', 'dummy-token', '123')
+            data = json.loads(mock_send.call_args.args[0].data.decode('utf-8'))
+            self.assertEqual(data['parse_mode'], 'HTML')
+            self.assertEqual(data['text'], '<b>Report</b>')
+            self.assertTrue(data['disable_web_page_preview'])
 
 
 if __name__ == '__main__':
