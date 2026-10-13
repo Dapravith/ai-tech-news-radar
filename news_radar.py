@@ -416,12 +416,17 @@ def main() -> int:
     print(message)
     if args.dry_run:
         return 0
-    token, chat = os.getenv('TELEGRAM_BOT_TOKEN', ''), os.getenv('TELEGRAM_CHAT_ID', '')
-    if not token or not chat:
-        logging.error('Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID as Actions secrets')
+    token = os.getenv('TELEGRAM_BOT_TOKEN', '').strip()
+    private_chat = os.getenv('TELEGRAM_CHAT_ID', '').strip()
+    channel = os.getenv('TELEGRAM_CHANNEL_ID', '').strip()
+    if not token or not (channel or private_chat):
+        logging.error('Configure TELEGRAM_BOT_TOKEN and a news delivery destination')
         return 2
-    send_telegram(message, token, chat)
-    logging.info('Telegram delivery confirmed')
+    # Public channel receives news; the separate failure-alert workflow continues
+    # to use TELEGRAM_CHAT_ID, keeping operational errors out of the channel.
+    destination = channel or private_chat
+    send_telegram(message, token, destination)
+    logging.info('Telegram news delivery confirmed to %s', 'channel' if channel else 'private chat')
     if not args.test_mode:
         # Mark state only AFTER a successful Telegram send.
         for item in selected:
