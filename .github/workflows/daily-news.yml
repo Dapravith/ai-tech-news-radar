@@ -57,6 +57,8 @@ jobs:
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      # Public channel username; not a credential. Keep operational alerts private.
+      TELEGRAM_CHANNEL_ID: '@MyAITechRadar'
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       TEST_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.test_mode && 'true' || 'false' }}
       PYTHONUNBUFFERED: "1"
