@@ -1,0 +1,181 @@
+name: Daily Trending Intelligence - 9 AM Cambodia
+
+on:
+  schedule:
+    - cron: "0 9 * * *"
+      timezone: "Asia/Phnom_Penh"
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: "Post TEST report to public channel without saving seen IDs"
+        required: false
+        type: boolean
+        default: true
+  pull_request:
+    paths:
+      - 'trending_radar.py'
+      - 'tests/**'
+      - '.github/workflows/daily-trending.yml'
+      - '.github/workflows/daily-news.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'trending_radar.py'
+      - 'tests/**'
+      - '.github/workflows/daily-trending.yml'
+      - '.github/workflows/daily-news.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-trending-intelligence
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    name: Test trending logic
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests -v
+
+  feed-smoke-test:
+    if: github.event_name == 'pull_request'
+    needs: [tests]
+    name: Live RSS preview - no Telegram
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Fetch and render a dry-run preview
+        run: python trending_radar.py --dry-run --test-mode
+      - name: Save preview
+        if: success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: trending-preview
+          path: out/trending_latest.txt
+          if-no-files-found: error
+          retention-days: 3
+
+  trending:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    name: Publish daily trending briefing
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHANNEL_ID: '@MyAITechRadar'
+      TEST_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.test_mode && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Test before publication
+        run: python -m unittest discover -s tests -v
+      - name: Publish morning report
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$TEST_MODE" = 'true' ]; then
+            python trending_radar.py --test-mode
+          else
+            python trending_radar.py
+          fi
+      - name: Save digest artifact
+        if: success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: daily-trending-brief
+          path: out/trending_latest.txt
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Persist delivery state with conflict retries
+        if: ${{ success() && env.TEST_MODE != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot="${RUNNER_TEMP}/delivered-trending.json"
+          cp state/trending_seen.json "$snapshot"
+          git config user.name 'ai-tech-radar[bot]'
+          git config user.email 'ai-tech-radar[bot]@users.noreply.github.com'
+          for attempt in 1 2 3; do
+            echo "State update attempt $attempt/3"
+            git fetch --no-tags origin main
+            git reset --hard origin/main
+
+            python - "$snapshot" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          path = Path('state/trending_seen.json')
+          current = json.loads(path.read_text(encoding='utf-8'))
+          delivered = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          if not isinstance(current, dict) or not isinstance(delivered, dict):
+              raise ValueError('Invalid trending deduplication state')
+          current.update(delivered)
+          path.write_text(json.dumps(current, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+
+            git add state/trending_seen.json
+            if git diff --cached --quiet; then
+              echo 'No new trending delivery records'
+              exit 0
+            fi
+            git commit -m 'chore: remember delivered trending stories [skip ci]'
+            if git push origin HEAD:main; then
+              echo 'Trending delivery records persisted'
+              exit 0
+            fi
+            echo '::warning::State push conflict; retrying'
+            sleep "$attempt"
+          done
+          echo '::error::Telegram delivered but dedup state could not be persisted'
+          exit 1
+
+  notify-failure:
+    if: ${{ always() && github.event_name != 'pull_request' && github.event_name != 'push' && needs.trending.result == 'failure' }}
+    needs: [trending]
+    name: Private failure alert
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - name: Send alert to private chat only
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from urllib.request import Request, urlopen
+          token, chat = os.getenv('TELEGRAM_BOT_TOKEN', ''), os.getenv('TELEGRAM_CHAT_ID', '')
+          if not token or not chat:
+              raise SystemExit('Private Telegram alert credentials unavailable')
+          run = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          data = json.dumps({'chat_id': chat, 'text': '🔴 DAILY TRENDING FAILED\nCheck: ' + run,
+                             'disable_web_page_preview': True}).encode('utf-8')
+          req = Request('https://api.telegram.org/bot' + token + '/sendMessage',
+                        data=data, headers={'Content-Type': 'application/json'}, method='POST')
+          try:
+              with urlopen(req, timeout=20) as response:
+                  result = json.load(response)
+              if not result.get('ok'):
+                  raise ValueError('Telegram rejected operational alert')
+          except Exception:
+              raise SystemExit('Unable to deliver private operational alert') from None
+          PY
