@@ -152,3 +152,15 @@ All timestamps: Cambodia ICT (UTC+07:00).
 ```
 
 Source titles, descriptions, and URLs are HTML-escaped before insertion into Telegram messages. A conservative message budget avoids cutting HTML tags and citations. If an unusually long original URL forces the formatter to include fewer articles, **only articles actually included in the sent report** are marked delivered in `state/seen.json`.
+
+## 11. Publish news to a Telegram channel
+
+Current news channel: [@MyAITechRadar](https://t.me/MyAITechRadar).
+
+1. In Telegram, add your **AI News Monitor** bot as a channel administrator and enable **Post Messages**. Turn off unrelated rights (adding admins, changing channel info, banning users); press **Save**.
+2. The GitHub Actions **news** job sets `TELEGRAM_CHANNEL_ID: '@MyAITechRadar'` (the public channel username is not a secret). The Python collector posts the news digest to that ID, including the references and ICT timestamps.
+3. The existing `TELEGRAM_BOT_TOKEN` and private `TELEGRAM_CHAT_ID` remain in GitHub Actions Secrets. The separate `notify-failure` job uses only `TELEGRAM_CHAT_ID`; operational failure alerts are not posted to the public channel.
+4. To preview the format, run the workflow manually with `test_mode: true`. **Test-mode digests also post to the public channel**, and do not change delivered-news state. Avoid repeated public test runs.
+5. If the Telegram Bot API denies the message, check the bot's channel admin **Post Messages** right and confirm the channel username. A failed delivery does not mark articles as seen; the GitHub Actions failure job notifies the private chat, if available.
+
+To change the news channel later, edit the workflow's `TELEGRAM_CHANNEL_ID` setting. To disable channel publishing, set it to an empty string and news delivery will fall back to the private chat. This is a cloud-scheduled collector, not a continuously online Telegram command-processing bot.
