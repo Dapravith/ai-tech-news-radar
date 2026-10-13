@@ -266,8 +266,14 @@ def ai_summarize(items: list[dict]) -> list[dict]:
 
 
 def fallback_summary(item: dict) -> str:
-    if item['summary']:
-        return shorten_sentence(item['summary'])
+    summary = item.get('summary') or ''
+    if item.get('source') == 'Hacker News' and (
+        'Article URL:' in summary or 'Comments URL:' in summary
+    ):
+        # HN RSS often contains link/score metadata, not a news synopsis.
+        return 'Community-submitted article; open the original source for the full context.'
+    if summary:
+        return shorten_sentence(summary)
     return f"Reported by {item['source']}; open the original article for details."
 
 
