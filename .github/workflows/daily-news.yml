@@ -1,0 +1,72 @@
+name: Daily AI Tech Radar
+
+on:
+  schedule:
+    # GitHub cron uses UTC: 02:00 UTC = 09:00 Cambodia (UTC+7).
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Send a TEST message (does not mark articles as seen)'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write # Required only to persist deduplication state
+
+concurrency:
+  group: daily-ai-tech-radar
+  cancel-in-progress: false
+
+jobs:
+  news:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      TEST_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.test_mode && 'true' || 'false' }}
+    steps:
+      - name: Checkout source and state
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Collect, rank, summarize, send to Telegram
+        run: |
+          if [ "$TEST_MODE" = 'true' ]; then
+            python news_radar.py --test-mode
+          else
+            python news_radar.py
+          fi
+
+      - name: Save the digest as an Actions artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-tech-radar-digest
+          path: out/latest.txt
+          retention-days: 7
+
+      - name: Commit delivered-news state
+        if: ${{ success() && env.TEST_MODE != 'true' }}
+        run: |
+          git add state/seen.json
+          if git diff --cached --quiet; then
+            echo 'No new articles to record'
+            exit 0
+          fi
+          git config user.name 'ai-tech-radar[bot]'
+          git config user.email 'ai-tech-radar[bot]@users.noreply.github.com'
+          git commit -m 'chore: remember delivered tech news [skip ci]'
+          git push
