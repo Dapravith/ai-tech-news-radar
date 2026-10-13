@@ -26,14 +26,13 @@ OUTPUT_DIR = ROOT / 'out'
 TZ_KH = timezone(timedelta(hours=7))
 FEEDS = {
     'OpenAI News': 'https://openai.com/news/rss.xml',
-    'Google DeepMind': 'https://deepmind.google/blog/rss.xml',
     'Google AI Blog': 'https://blog.google/innovation-and-ai/technology/ai/rss/',
     'Hugging Face': 'https://huggingface.co/blog/feed.xml',
     'GitHub Blog': 'https://github.blog/feed/',
     'Hacker News': 'https://hnrss.org/frontpage',
     'Cloudflare Blog': 'https://blog.cloudflare.com/rss/',
     'Kubernetes Blog': 'https://kubernetes.io/feed.xml',
-    'Python Blog': 'https://www.python.org/blogs/rss/',
+    'Python Blog': 'https://blog.python.org/rss.xml',
 }
 # Weighted interest keywords. The incoming source text is untrusted data.
 KEYWORDS = {
@@ -146,7 +145,7 @@ def score(item: dict, now: datetime) -> float:
             points += weight * 2
         elif re.search(pattern, description):
             points += weight * 0.5
-    if item['source'] in ('OpenAI News', 'Google DeepMind', 'Google AI Blog', 'Hugging Face', 'GitHub Blog', 'Kubernetes Blog', 'Cloudflare Blog', 'Python Blog'):
+    if item['source'] in ('OpenAI News', 'Google AI Blog', 'Hugging Face', 'GitHub Blog', 'Kubernetes Blog', 'Cloudflare Blog', 'Python Blog'):
         points += 2
     hours = max((now - item['published']).total_seconds() / 3600, 0)
     return points + max(0, 24 - hours) / 15
@@ -187,6 +186,26 @@ def shorten_sentence(value: str, size: int = 165) -> str:
     return text.strip()
 
 
+def parse_ai_response(result: dict) -> list[dict]:
+    """Validate OpenRouter chat output before reading its chosen article IDs."""
+    choices = result.get('choices')
+    if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+        raise ValueError('OpenRouter returned no choices')
+    message = choices[0].get('message') or {}
+    content = message.get('content') if isinstance(message, dict) else None
+    if isinstance(content, list):
+        content = ''.join(part.get('text', '') for part in content if isinstance(part, dict))
+    if not isinstance(content, str) or not content.strip():
+        raise ValueError('OpenRouter returned empty model content')
+    start, end = content.find('{'), content.rfind('}')
+    if start < 0 or end < start:
+        raise ValueError('OpenRouter response does not contain JSON')
+    parsed = json.loads(content[start:end + 1])
+    if not isinstance(parsed, dict) or not isinstance(parsed.get('items'), list):
+        raise ValueError('OpenRouter response has no items list')
+    return parsed['items']
+
+
 def ai_summarize(items: list[dict]) -> list[dict]:
     key = os.getenv('OPENROUTER_API_KEY', '').strip()
     if not key:
@@ -211,12 +230,7 @@ def ai_summarize(items: list[dict]) -> list[dict]:
     try:
         with urlopen(req, timeout=45) as response:
             result = json.load(response)
-        content = result['choices'][0]['message']['content']
-        if isinstance(content, list):
-            content = ''.join(p.get('text','') for p in content if isinstance(p, dict))
-        content = re.sub(r'^\s*```(?:json)?\s*|\s*```\s*$', '', content.strip(), flags=re.I)
-        start, end = content.find('{'), content.rfind('}')
-        candidates = json.loads(content[start:end + 1])['items']
+        candidates = parse_ai_response(result)
         by_id = {i['id']: i for i in items}
         selected, used = [], set()
         for c in candidates:
@@ -247,7 +261,7 @@ def fallback_summary(item: dict) -> str:
 
 def build_message(items: list[dict], now: datetime, test_mode: bool, partial: bool) -> str:
     date = now.astimezone(TZ_KH).strftime('%d %b %Y')
-    lines = [f"🧠 AI & TECH DAILY | {date}"]
+    lines = [f"🧠 AI & TECH RADAR | {date}"]
     if test_mode:
         lines.append('🧪 TEST RUN (may include previously reported stories)')
     if partial:
@@ -306,6 +320,9 @@ def main() -> int:
         logging.error('All sources unavailable; did not declare no news')
         return 1
     candidates = select_items(all_items, seen, now, args.test_mode)
+    if not candidates and not args.test_mode:
+        logging.info('No new relevant articles; not sending Telegram notification')
+        return 0
     selected = ai_summarize(candidates) if candidates else []
     message = build_message(selected, now, args.test_mode, bool(errors))
     OUTPUT_DIR.mkdir(exist_ok=True)
@@ -327,7 +344,9 @@ def main() -> int:
         expire_before = now - timedelta(days=60)
         seen = {k: v for k, v in seen.items() if (parse_datetime(v) or now) >= expire_before}
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        STATE_FILE.write_text(json.dumps(seen, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+        temp_file = STATE_FILE.with_suffix('.json.tmp')
+        temp_file.write_text(json.dumps(seen, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+        os.replace(temp_file, STATE_FILE)
     return 0
 
 
