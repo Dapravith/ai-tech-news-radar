@@ -222,5 +222,83 @@ class NewsRadarTest(unittest.TestCase):
             self.assertTrue(data['disable_web_page_preview'])
 
 
+    def test_channel_delivery_separate_from_private_chat(self):
+        article = {
+            'title': 'Important Kubernetes security release',
+            'url': 'https://example.org/security-release',
+            'published': datetime.now(timezone.utc),
+            'source': 'Kubernetes Blog',
+            'summary': 'An important release for DevOps teams',
+        }
+        with (tempfile.TemporaryDirectory() as folder,
+              patch('news_radar.FEEDS', {'Working': 'https://example.org/feed'}),
+              patch('news_radar.fetch_feed', return_value=[article]),
+              patch('news_radar.STATE_FILE', Path(folder) / 'seen.json'),
+              patch('news_radar.OUTPUT_DIR', Path(folder) / 'out'),
+              patch('news_radar.send_telegram') as notify,
+              patch.dict(os.environ, {
+                  'TELEGRAM_BOT_TOKEN': 'dummy',
+                  'TELEGRAM_CHAT_ID': 'private-123',
+                  'TELEGRAM_CHANNEL_ID': '@MyAITechRadar',
+                  'OPENROUTER_API_KEY': '',
+              }),
+              patch.object(sys, 'argv', ['news_radar.py'])):
+            self.assertEqual(news_radar.main(), 0)
+            notify.assert_called_once()
+            self.assertEqual(notify.call_args.args[2], '@MyAITechRadar')
+            self.assertIn(news_radar.make_id(article), json.loads(
+                (Path(folder) / 'seen.json').read_text()
+            ))
+
+    def test_private_chat_fallback_when_no_channel_configured(self):
+        article = {
+            'title': 'Important Kubernetes security release',
+            'url': 'https://example.org/security-release',
+            'published': datetime.now(timezone.utc),
+            'source': 'Kubernetes Blog',
+            'summary': 'Infrastructure security improvements',
+        }
+        with (tempfile.TemporaryDirectory() as folder,
+              patch('news_radar.FEEDS', {'Working': 'https://example.org/feed'}),
+              patch('news_radar.fetch_feed', return_value=[article]),
+              patch('news_radar.STATE_FILE', Path(folder) / 'seen.json'),
+              patch('news_radar.OUTPUT_DIR', Path(folder) / 'out'),
+              patch('news_radar.send_telegram') as notify,
+              patch.dict(os.environ, {
+                  'TELEGRAM_BOT_TOKEN': 'dummy',
+                  'TELEGRAM_CHAT_ID': 'private-123',
+                  'TELEGRAM_CHANNEL_ID': '',
+                  'OPENROUTER_API_KEY': '',
+              }),
+              patch.object(sys, 'argv', ['news_radar.py'])):
+            self.assertEqual(news_radar.main(), 0)
+            self.assertEqual(notify.call_args.args[2], 'private-123')
+
+    def test_channel_failure_does_not_record_news_as_delivered(self):
+        article = {
+            'title': 'New FastAPI security advisory',
+            'url': 'https://example.org/fastapi-security',
+            'published': datetime.now(timezone.utc),
+            'source': 'GitHub Blog',
+            'summary': 'Security guidance',
+        }
+        with (tempfile.TemporaryDirectory() as folder,
+              patch('news_radar.FEEDS', {'Working': 'https://example.org/feed'}),
+              patch('news_radar.fetch_feed', return_value=[article]),
+              patch('news_radar.STATE_FILE', Path(folder) / 'seen.json'),
+              patch('news_radar.OUTPUT_DIR', Path(folder) / 'out'),
+              patch('news_radar.send_telegram', side_effect=RuntimeError('channel access denied')),
+              patch.dict(os.environ, {
+                  'TELEGRAM_BOT_TOKEN': 'dummy',
+                  'TELEGRAM_CHAT_ID': 'private-123',
+                  'TELEGRAM_CHANNEL_ID': '@MyAITechRadar',
+                  'OPENROUTER_API_KEY': '',
+              }),
+              patch.object(sys, 'argv', ['news_radar.py'])):
+            with self.assertRaisesRegex(RuntimeError, 'channel access denied'):
+                news_radar.main()
+            self.assertFalse((Path(folder) / 'seen.json').exists())
+
+
 if __name__ == '__main__':
     unittest.main()
