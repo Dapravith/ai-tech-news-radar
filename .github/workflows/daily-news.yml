@@ -7,6 +7,13 @@ on:
     # Cambodia: 09, 12, 15, 18, 21, 00, 03, 06
     - cron: "0 2,5,8,11,14,17,20,23 * * *"
 
+  push:
+    branches: [main]
+    paths:
+      - 'news_radar.py'
+      - 'tests/**'
+      - '.github/workflows/daily-news.yml'
+
   pull_request:
     paths:
       - 'news_radar.py'
@@ -33,8 +40,8 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - run: python -m unittest discover -s tests -v
@@ -56,12 +63,12 @@ jobs:
 
     steps:
       - name: Checkout source and state
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: true
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -82,27 +89,105 @@ jobs:
 
       - name: Save news digest artifact
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ai-tech-radar-digest
           path: out/latest.txt
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Commit delivered-news state
+      - name: Persist delivered-news state (retry non-fast-forward pushes)
         if: ${{ success() && env.TEST_MODE != 'true' }}
+        shell: bash
         run: |
           set -euo pipefail
 
-          git add state/seen.json
-
-          if git diff --cached --quiet; then
-            echo "No new articles to record"
-            exit 0
-          fi
-
+          # Save the state *after* Telegram accepted delivery.
+          # Rebase onto fresh main each attempt; never force-push.
+          snapshot="${RUNNER_TEMP}/delivered-seen.json"
+          cp state/seen.json "$snapshot"
           git config user.name "ai-tech-radar[bot]"
           git config user.email "ai-tech-radar[bot]@users.noreply.github.com"
 
-          git commit -m "chore: update delivered news state [skip ci]"
-          git push
+          for attempt in 1 2 3; do
+            echo "State persistence attempt $attempt/3"
+            git fetch --no-tags origin main
+            git reset --hard origin/main
+
+            python - "$snapshot" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          state_file = Path("state/seen.json")
+          current = json.loads(state_file.read_text(encoding="utf-8"))
+          delivered = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          if not isinstance(current, dict) or not isinstance(delivered, dict):
+              raise ValueError("Invalid deduplication state")
+          current.update(delivered)
+          state_file.write_text(json.dumps(current, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+
+            git add state/seen.json
+            if git diff --cached --quiet; then
+              echo "Delivered articles are already recorded"
+              exit 0
+            fi
+
+            git commit -m "chore: remember delivered news [skip ci]"
+            if git push origin HEAD:main; then
+              echo "Delivered-news state persisted"
+              exit 0
+            fi
+            echo "::warning::Git push did not succeed, retrying with latest main"
+            sleep "$attempt"
+          done
+
+          echo "::error::Telegram delivery succeeded, but state could not be persisted"
+          exit 1
+
+  notify-failure:
+    name: Alert Telegram on failed workflow
+    if: ${{ always() && github.event_name != 'pull_request' && needs.news.result == 'failure' }}
+    needs: [news]
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - name: Send operational failure alert
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+          chat = os.environ.get("TELEGRAM_CHAT_ID", "")
+          if not token or not chat:
+              raise SystemExit("Telegram secrets unavailable for failure alert")
+          run_url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          message = (
+              "🔴 AI TECH RADAR — WORKFLOW FAILED\n"
+              "Check job logs and delivery state before retrying.\n"
+              + run_url
+          )
+          url = f"https://api.telegram.org/bot{token}/sendMessage"
+          data = json.dumps({"chat_id": chat, "text": message,
+                             "disable_web_page_preview": True}).encode("utf-8")
+          req = urllib.request.Request(url, data=data,
+                                       headers={"Content-Type": "application/json"},
+                                       method="POST")
+          try:
+              with urllib.request.urlopen(req, timeout=20) as response:
+                  reply = json.load(response)
+              if not reply.get("ok"):
+                  raise ValueError("Telegram declined failure alert")
+          except Exception:
+              raise SystemExit("Unable to deliver Telegram workflow failure alert") from None
+          print("Telegram workflow failure alert sent")
+          PY
