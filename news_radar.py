@@ -187,23 +187,35 @@ def shorten_sentence(value: str, size: int = 165) -> str:
 
 
 def parse_ai_response(result: dict) -> list[dict]:
-    """Validate OpenRouter chat output before reading its chosen article IDs."""
+    """Parse structured free-model output; never trust model-provided article IDs."""
+    if not isinstance(result, dict):
+        raise ValueError('OpenRouter returned an invalid response')
     choices = result.get('choices')
     if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
         raise ValueError('OpenRouter returned no choices')
     message = choices[0].get('message') or {}
     content = message.get('content') if isinstance(message, dict) else None
     if isinstance(content, list):
-        content = ''.join(part.get('text', '') for part in content if isinstance(part, dict))
+        content = ''.join(
+            part.get('text') or '' for part in content
+            if isinstance(part, dict) and isinstance(part.get('text'), str)
+        )
     if not isinstance(content, str) or not content.strip():
         raise ValueError('OpenRouter returned empty model content')
-    start, end = content.find('{'), content.rfind('}')
-    if start < 0 or end < start:
-        raise ValueError('OpenRouter response does not contain JSON')
-    parsed = json.loads(content[start:end + 1])
-    if not isinstance(parsed, dict) or not isinstance(parsed.get('items'), list):
-        raise ValueError('OpenRouter response has no items list')
-    return parsed['items']
+    # Support fenced JSON, preambles and extra model text without accepting
+    # instructions or unstructured claims as article summaries.
+    decoder = json.JSONDecoder()
+    for pos, char in enumerate(content):
+        if char not in '{[':
+            continue
+        try:
+            parsed, _ = decoder.raw_decode(content[pos:])
+        except json.JSONDecodeError:
+            continue
+        candidates = parsed.get('items') if isinstance(parsed, dict) else parsed
+        if isinstance(candidates, list):
+            return candidates
+    raise ValueError('OpenRouter response does not contain a JSON items list')
 
 
 def ai_summarize(items: list[dict]) -> list[dict]:
@@ -237,7 +249,7 @@ def ai_summarize(items: list[dict]) -> list[dict]:
             if not isinstance(c, dict) or c.get('id') not in by_id or c['id'] in used:
                 continue
             article = dict(by_id[c['id']])
-            desc = clean(str(c.get('why', '')), 200)
+            desc = clean(c.get('why') if isinstance(c.get('why'), str) else '', 200)
             if desc and len(desc) <= 165 and not ('http://' in desc or 'https://' in desc):
                 article['ai_summary'] = desc
             selected.append(article)
@@ -312,18 +324,18 @@ def main() -> int:
             errors.append(source)
             logging.warning('%s: feed unavailable (%s)', source, exc)
     if len(errors) == len(FEEDS):
-        message = '🔴 AI TECH RADAR FAILURE\nAll news feeds failed. Check the GitHub Actions logs.'
-        if not args.dry_run:
-            token, chat = os.getenv('TELEGRAM_BOT_TOKEN', ''), os.getenv('TELEGRAM_CHAT_ID', '')
-            if token and chat:
-                send_telegram(message, token, chat)
-        logging.error('All sources unavailable; did not declare no news')
+        # The workflow-level failure notifier sends one operational alert.
+        # Keep local and dry runs side-effect-free when all sources fail.
+        logging.error('All news sources unavailable; workflow will report this failure')
         return 1
     candidates = select_items(all_items, seen, now, args.test_mode)
     if not candidates and not args.test_mode:
         logging.info('No new relevant articles; not sending Telegram notification')
         return 0
     selected = ai_summarize(candidates) if candidates else []
+    if not selected and not args.test_mode:
+        logging.info('AI returned no usable articles; skipping Telegram')
+        return 0
     message = build_message(selected, now, args.test_mode, bool(errors))
     OUTPUT_DIR.mkdir(exist_ok=True)
     (OUTPUT_DIR / 'latest.txt').write_text(message + '\n', encoding='utf-8')

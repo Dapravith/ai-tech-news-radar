@@ -92,5 +92,63 @@ class NewsRadarTest(unittest.TestCase):
                 send_telegram('Test', 'dummy-token', '123')
 
 
+    def test_parse_markdown_wrapped_model_response(self):
+        response = {
+            'choices': [{'message': {'content':
+                'Here is the result:\\n```json\\n'
+                '{"items":[{"id":"known","why":"Relevant to DevOps"}]}'
+                '\\n```'}}]
+        }
+        self.assertEqual(parse_ai_response(response)[0]['id'], 'known')
+
+    def test_parse_json_list_model_response(self):
+        response = {'choices': [{'message': {'content': '[{"id":"known"}]'}}]}
+        self.assertEqual(parse_ai_response(response)[0]['id'], 'known')
+
+    def test_parse_malformed_response_fails_closed(self):
+        for content in ('No stories today', '{"error":"not JSON items"}', None, 77):
+            with self.subTest(content=content):
+                with self.assertRaises(ValueError):
+                    parse_ai_response({'choices': [{'message': {'content': content}}]})
+
+    def test_production_marks_delivered_and_next_run_is_silent(self):
+        now = datetime.now(timezone.utc)
+        article = {
+            'title': 'Major Kubernetes developer release',
+            'url': 'https://example.org/unique-k8s-release',
+            'published': now,
+            'source': 'Kubernetes Blog',
+            'summary': 'Developer infrastructure improvements',
+        }
+        with (tempfile.TemporaryDirectory() as folder,
+              patch('news_radar.FEEDS', {'Working': 'https://example.org/rss'}),
+              patch('news_radar.fetch_feed', return_value=[article]),
+              patch('news_radar.STATE_FILE', Path(folder) / 'seen.json'),
+              patch('news_radar.OUTPUT_DIR', Path(folder) / 'out'),
+              patch('news_radar.send_telegram') as notify,
+              patch.dict(os.environ, {
+                  'TELEGRAM_BOT_TOKEN': 'dummy',
+                  'TELEGRAM_CHAT_ID': '123',
+                  'OPENROUTER_API_KEY': '',
+              }),
+              patch.object(sys, 'argv', ['news_radar.py'])):
+            self.assertEqual(news_radar.main(), 0)
+            self.assertEqual(notify.call_count, 1)
+            state = json.loads((Path(folder) / 'seen.json').read_text())
+            self.assertIn(news_radar.make_id(article), state)
+            self.assertEqual(news_radar.main(), 0)
+            self.assertEqual(notify.call_count, 1)
+
+    def test_complete_feed_outage_does_not_send_duplicate_alert(self):
+        with (tempfile.TemporaryDirectory() as folder,
+              patch('news_radar.FEEDS', {'Broken': 'https://invalid.invalid/rss'}),
+              patch('news_radar.fetch_feed', side_effect=OSError('outage')),
+              patch('news_radar.STATE_FILE', Path(folder) / 'seen.json'),
+              patch('news_radar.send_telegram') as notify,
+              patch.object(sys, 'argv', ['news_radar.py'])):
+            self.assertEqual(news_radar.main(), 1)
+            notify.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()

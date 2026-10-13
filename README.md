@@ -1,6 +1,6 @@
 # Cloud AI & Tech News Radar (zero subscription)
 
-A **daily Telegram briefing even when your Mac is off**. GitHub Actions runs the schedule, public RSS/Atom feeds provide news, optional `openrouter/free` selects/summarizes articles, and Telegram sends the message. No desktop browser or VPS is needed. There are no recurring paid services in the default configuration, subject to providers' free-tier limits.
+A **Telegram tech-news radar running every three hours even when your Mac is off**. GitHub Actions runs the schedule, public RSS/Atom feeds provide news, optional `openrouter/free` selects/summarizes articles, and Telegram sends the message. No desktop browser or VPS is needed. There are no recurring paid services in the default configuration, subject to providers' free-tier limits.
 
 ## Contents
 
@@ -52,27 +52,27 @@ Visit https://openrouter.ai/keys and create an API key under the **free** plan i
 
 **Without an OpenRouter key:** everything still works using keyword filtering plus source-provided descriptions. **With the key:** the AI chooses 3–5 salient articles and writes one-sentence takeaways based only on feed titles and snippets. If the model fails, the script uses the non-AI fallback. Neither mode can independently verify the full text of every article: open the source link for confirmation of important claims.
 
-## 4. First cloud test (does not change dedup state)
+## 4. Manual cloud test (does not change dedup state)
 
-On GitHub → **Actions → Daily AI Tech Radar → Run workflow**. Leave **Send a TEST message** checked and run it.
+On GitHub → **Actions → AI Tech Radar - Every 3 Hours → Run workflow**. Leave **Send a TEST message** checked and run it.
 
 Wait for the job to finish; it fetches live feeds and sends a message to Telegram automatically. The phone can receive it even if your Mac is shut down. The test message is labeled TEST RUN, and allows articles from the past week to increase the chance of showing real headlines.
 
 If Telegram receives the message, rerun with `test_mode=false` to exercise the normal deduplication flow. Verify `state/seen.json` changed in the repository after a successful delivery. Check **Actions → workflow run → Logs** and the `ai-tech-radar-digest` artifact for diagnostic information.
 
-## 5. Automatic daily delivery
+## 5. Automatic monitoring every three hours
 
 `.github/workflows/daily-news.yml` contains:
 
 ```yaml
 on:
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '0 2,5,8,11,14,17,20,23 * * *'
 ```
 
-GitHub cron uses UTC; **02:00 UTC is 09:00 in Cambodia**. GitHub may start scheduled jobs late or, rarely, skip them during high load; it is not a strict exact-time SLA. The workflow runs on GitHub-hosted Ubuntu whether your Mac is off or on.
+GitHub cron uses UTC. Runs start around **09:00, 12:00, 15:00, 18:00, 21:00, 00:00, 03:00 and 06:00 Cambodia time**. GitHub may start scheduled jobs late or, rarely, skip them during high load; it is not a strict exact-time SLA. The workflow runs on GitHub-hosted Ubuntu whether your Mac is off or on.
 
-The job commits only hashes and delivery timestamps to `state/seen.json` to suppress repeat article URLs. It records state **after Telegram successfully accepts the message**. If a workflow fails after Telegram sends but before the state commit, a rerun can repeat a digest. If feeds are unreachable, it sends an explicit failure alert instead of falsely reporting no news.
+Production runs stay silent when there are no new significant stories. The job commits only URL hashes and delivery timestamps to `state/seen.json` to suppress repeat articles. It retries conflicting state pushes three times by merging with the latest `main`, without force-pushing. It records state **after Telegram successfully accepts the message**. The workflow sends one separate Telegram operational alert on job failure, including complete feed outages. If a workflow fails after Telegram sends but before state is committed, a later run can still repeat news: Telegram and Git commits do not share a transaction. The separate GitHub `push` trigger runs a production smoke test on source/workflow changes to `main`; state-only commits do not retrigger the job.
 
 Public GitHub repositories can have their scheduled workflows disabled after **60 days without repository activity**. Check that the schedule stays enabled, especially after periods with no new stories.
 
@@ -102,7 +102,7 @@ For a future always-on Hermes, install Hermes CLI on a Linux VM and use its buil
 | No headlines | Period had no fresh relevant items; inspect sources and scoring threshold |
 | OpenRouter 429 or failure | Free quota exhausted; digest falls back to feed snippets |
 | No state update | Job was in test mode; no new headlines; workflow push permission |
-| Daily workflow not running | `.github/workflows` on default branch, Actions enabled, 60-day inactivity, GitHub scheduler delay |
+| Three-hour workflow not running | `.github/workflows` on default branch, Actions enabled, 60-day inactivity, GitHub scheduler delay |
 | Too many repeated messages | Verify `state/seen.json` commits succeed and avoid multiple running schedulers |
 
 ## Reference documentation
@@ -112,3 +112,11 @@ For a future always-on Hermes, install Hermes CLI on a Linux VM and use its buil
 - OpenRouter free model router: https://openrouter.ai/openrouter/free
 - Telegram Bot API: https://core.telegram.org/bots/api#sendmessage
 - Hermes: https://hermes-agent.nousresearch.com/docs/guides/team-telegram-assistant
+
+## 9. Reliability and limitations
+
+- PRs run offline unit tests without accessing Telegram secrets; merging to `main` runs the production collector once, while only RSS/AI changes and workflow changes match the push filter.
+- The separate failed-job notification posts an operational Telegram alert. Telegram API outages may prevent that alert; always inspect [GitHub Actions](https://github.com/Dapravith/ai-tech-news-radar/actions).
+- Free OpenRouter models are best effort: malformed, non-JSON or empty responses fall back to source-provided summaries. No paid fallback model is configured.
+- GitHub scheduled runs can arrive late or occasionally be skipped. A true external missed-run watchdog and a continuously running Hermes Agent require separate infrastructure.
+- After production delivery, check `state/seen.json` and run production mode again to test suppression. Duplicate prevention is best-effort because Telegram `sendMessage` has no atomic transaction with the Git state commit.
