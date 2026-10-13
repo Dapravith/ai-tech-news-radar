@@ -1,33 +1,40 @@
-name: Daily AI Tech Radar
+
+name: AI Tech Radar - Every 3 Hours
 
 on:
   schedule:
-    # GitHub cron uses UTC: 02:00 UTC = 09:00 Cambodia (UTC+7).
-    - cron: '0 2 * * *'
+    # Every 3 hours, beginning at 09:00 Cambodia time (UTC+7)
+    # Cambodia: 09, 12, 15, 18, 21, 00, 03, 06
+    - cron: "0 2,5,8,11,14,17,20,23 * * *"
+
   workflow_dispatch:
     inputs:
       test_mode:
-        description: 'Send a TEST message (does not mark articles as seen)'
+        description: "Send a TEST message without updating seen articles"
         required: false
         type: boolean
         default: true
 
 permissions:
-  contents: write # Required only to persist deduplication state
+  contents: write
 
 concurrency:
-  group: daily-ai-tech-radar
+  group: ai-tech-radar
   cancel-in-progress: false
 
 jobs:
   news:
+    name: Collect, Filter and Notify
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       TEST_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.test_mode && 'true' || 'false' }}
+      PYTHONUNBUFFERED: "1"
+
     steps:
       - name: Checkout source and state
         uses: actions/checkout@v4
@@ -37,36 +44,46 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
 
-      - name: Collect, rank, summarize, send to Telegram
+      - name: Collect, rank, summarize and notify
         run: |
-          if [ "$TEST_MODE" = 'true' ]; then
+          set -euo pipefail
+
+          if [ "$TEST_MODE" = "true" ]; then
+            echo "Running TEST mode..."
             python news_radar.py --test-mode
           else
+            echo "Running scheduled news monitoring..."
             python news_radar.py
           fi
 
-      - name: Save the digest as an Actions artifact
+      - name: Save news digest artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ai-tech-radar-digest
           path: out/latest.txt
+          if-no-files-found: ignore
           retention-days: 7
 
       - name: Commit delivered-news state
         if: ${{ success() && env.TEST_MODE != 'true' }}
         run: |
+          set -euo pipefail
+
           git add state/seen.json
+
           if git diff --cached --quiet; then
-            echo 'No new articles to record'
+            echo "No new articles to record"
             exit 0
           fi
-          git config user.name 'ai-tech-radar[bot]'
-          git config user.email 'ai-tech-radar[bot]@users.noreply.github.com'
-          git commit -m 'chore: remember delivered tech news [skip ci]'
+
+          git config user.name "ai-tech-radar[bot]"
+          git config user.email "ai-tech-radar[bot]@users.noreply.github.com"
+
+          git commit -m "chore: update delivered news state [skip ci]"
           git push
