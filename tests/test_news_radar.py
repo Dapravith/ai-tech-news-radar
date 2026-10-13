@@ -222,5 +222,21 @@ class NewsRadarTest(unittest.TestCase):
             self.assertTrue(data['disable_web_page_preview'])
 
 
+    def test_hacker_news_metadata_is_not_shown_as_editorial_summary(self):
+        now = datetime(2026, 10, 13, 8, tzinfo=timezone.utc)
+        item = {
+            'title': 'New software research overview',
+            'summary': 'Article URL: https://example.org/software Comments URL: https://news.ycombinator.com/item?id=5 Points: 129',
+            'published': now,
+            'url': 'https://example.org/software',
+            'source': 'Hacker News',
+        }
+        report = build_message([item], now, False, False)
+        self.assertIn('Community-submitted article', report)
+        self.assertNotIn('Comments URL:', report)
+        self.assertNotIn('Points:', report)
+        self.assertIn('<a href="https://example.org/software">', report)
+
+
 if __name__ == '__main__':
     unittest.main()
