@@ -178,10 +178,17 @@ class NewsRadarTest(unittest.TestCase):
 
     def test_long_original_references_do_not_break_html_or_state(self):
         now = datetime.now(timezone.utc)
+        headlines = [
+            'Major Kubernetes API update',
+            'FastAPI typed validation release',
+            'PostgreSQL storage performance analysis',
+            'Next.js authentication security advisory',
+            'Docker cloud observability improvements',
+        ]
         articles = [
-            {'title': f'Major Kubernetes release {n}', 'url': 'https://example.org/' + 'p' * 1100 + str(n),
+            {'title': title, 'url': 'https://example.org/' + 'p' * 1100 + str(n),
              'published': now, 'source': 'Kubernetes Blog', 'summary': 'Cloud improvement'}
-            for n in range(5)
+            for n, title in enumerate(headlines)
         ]
         message, displayed = render_news_report(articles, now, False, False)
         self.assertLessEqual(len(message), 3800)
