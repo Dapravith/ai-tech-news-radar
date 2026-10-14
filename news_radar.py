@@ -22,6 +22,7 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent
 STATE_FILE = ROOT / 'state' / 'seen.json'
+TRENDING_STATE_FILE = ROOT / 'state' / 'trending_seen.json'
 OUTPUT_DIR = ROOT / 'out'
 TZ_KH = timezone(timedelta(hours=7))
 FEEDS = {
@@ -155,6 +156,32 @@ def make_id(item: dict) -> str:
     return hashlib.sha256(item['url'].encode('utf-8')).hexdigest()[:22]
 
 
+def similar_headline(first: str, second: str) -> bool:
+    """Collapse obvious same-topic headline variants without losing new versions."""
+    a = re.findall(r'[a-z0-9]+', first.casefold())
+    b = re.findall(r'[a-z0-9]+', second.casefold())
+    if not a or not b:
+        return False
+    if [x for x in a if x.isdecimal()] != [x for x in b if x.isdecimal()]:
+        return False
+    if difflib.SequenceMatcher(None, ' '.join(a), ' '.join(b)).ratio() > 0.80:
+        return True
+    shorter, longer = sorted((a, b), key=len)
+    return (len(shorter) >= 3 and len(' '.join(shorter)) >= 14
+            and longer[:len(shorter)] == shorter)
+
+
+def read_seen_state(path: Path) -> dict:
+    """Fail closed if a delivery-state file is invalid; absent means empty."""
+    try:
+        parsed = json.loads(path.read_text(encoding='utf-8'))
+    except FileNotFoundError:
+        return {}
+    if not isinstance(parsed, dict):
+        raise ValueError('Delivery state must be a JSON object')
+    return parsed
+
+
 def select_items(items: list[dict], seen: dict, now: datetime, test_mode: bool, limit: int = 5) -> list[dict]:
     age = timedelta(days=7) if test_mode else timedelta(hours=40)
     shortlist = []
@@ -170,7 +197,7 @@ def select_items(items: list[dict], seen: dict, now: datetime, test_mode: bool, 
     shortlist.sort(key=lambda i: (i['score'], i['published'].timestamp()), reverse=True)
     unique = []
     for item in shortlist:
-        if any(item['url'] == other['url'] or difflib.SequenceMatcher(None, item['title'].lower(), other['title'].lower()).ratio() > 0.80 for other in unique):
+        if any(item['url'] == other['url'] or similar_headline(item['title'], other['title']) for other in unique):
             continue
         unique.append(item)
         if len(unique) >= 22:
@@ -383,10 +410,8 @@ def main() -> int:
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
     now = datetime.now(timezone.utc)
-    try:
-        seen = json.loads(STATE_FILE.read_text(encoding='utf-8'))
-    except (FileNotFoundError, json.JSONDecodeError):
-        seen = {}
+    seen = read_seen_state(STATE_FILE)
+    trending_seen = read_seen_state(TRENDING_STATE_FILE)
     all_items, errors = [], []
     for source, url in FEEDS.items():
         try:
@@ -401,7 +426,10 @@ def main() -> int:
         # Keep local and dry runs side-effect-free when all sources fail.
         logging.error('All news sources unavailable; workflow will report this failure')
         return 1
-    candidates = select_items(all_items, seen, now, args.test_mode)
+    # Exclude stories already delivered by the morning trending briefing.
+    # Only technical deliveries are written to the technical state file.
+    seen_across_reports = {**trending_seen, **seen} if not args.test_mode else seen
+    candidates = select_items(all_items, seen_across_reports, now, args.test_mode)
     if not candidates and not args.test_mode:
         logging.info('No new relevant articles; not sending Telegram notification')
         return 0

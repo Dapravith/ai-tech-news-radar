@@ -300,5 +300,64 @@ class NewsRadarTest(unittest.TestCase):
             self.assertFalse((Path(folder) / 'seen.json').exists())
 
 
+    def test_same_topic_variants_are_not_posted_twice(self):
+        now = datetime(2026, 10, 14, 1, 0, tzinfo=timezone.utc)
+        a = {
+            'title': 'Gemini 4 Argon',
+            'url': 'https://example.org/gemini-argon',
+            'published': now,
+            'source': 'Hacker News',
+            'summary': 'AI model update',
+        }
+        b = dict(a, title='Gemini 4 Argon for Robotics',
+                 url='https://example.org/gemini-robotics')
+        self.assertEqual(len(select_items([a, b], {}, now, False)), 1)
+
+    def test_distinct_release_versions_are_not_collapsed(self):
+        self.assertFalse(news_radar.similar_headline(
+            'Gemini 4 Argon', 'Gemini 5 Argon'))
+        self.assertFalse(news_radar.similar_headline(
+            'Python 3.16 alpha 1 released', 'Python 3.16 alpha 2 released'))
+
+    def test_tech_radar_respects_trending_delivery_state(self):
+        now = datetime.now(timezone.utc)
+        story = {
+            'title': 'Important Kubernetes security release',
+            'url': 'https://example.org/important-security',
+            'published': now,
+            'source': 'Kubernetes Blog',
+            'summary': 'Kubernetes security update',
+        }
+        with (tempfile.TemporaryDirectory() as d,
+              patch('news_radar.FEEDS', {'Working': 'https://example.org/rss'}),
+              patch('news_radar.fetch_feed', return_value=[story]),
+              patch('news_radar.STATE_FILE', Path(d) / 'seen.json'),
+              patch('news_radar.TRENDING_STATE_FILE', Path(d) / 'trending.json'),
+              patch('news_radar.OUTPUT_DIR', Path(d) / 'out'),
+              patch('news_radar.send_telegram') as send,
+              patch.dict(os.environ, {
+                  'TELEGRAM_BOT_TOKEN': 'fake',
+                  'TELEGRAM_CHANNEL_ID': '@MyAITechRadar',
+                  'OPENROUTER_API_KEY': '',
+              }),
+              patch.object(sys, 'argv', ['news_radar.py'])):
+            (Path(d) / 'trending.json').write_text(json.dumps({
+                news_radar.make_id(story): now.isoformat(),
+            }))
+            self.assertEqual(news_radar.main(), 0)
+            send.assert_not_called()
+            self.assertFalse((Path(d) / 'seen.json').exists())
+
+    def test_invalid_deduplication_state_fails_closed(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / 'broken.json'
+            path.write_text('{not-valid-json')
+            with self.assertRaises(json.JSONDecodeError):
+                news_radar.read_seen_state(path)
+            path.write_text('[]')
+            with self.assertRaises(ValueError):
+                news_radar.read_seen_state(path)
+
+
 if __name__ == '__main__':
     unittest.main()
