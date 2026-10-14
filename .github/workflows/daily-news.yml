@@ -37,7 +37,7 @@ concurrency:
 
 jobs:
   unit-tests:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -47,7 +47,8 @@ jobs:
       - run: python -m unittest discover -s tests -v
 
   news:
-    if: github.event_name != 'pull_request'
+    # Deploying code should not create extra public posts.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
     name: Collect, Filter and Notify
@@ -150,7 +151,7 @@ jobs:
 
   notify-failure:
     name: Alert Telegram on failed workflow
-    if: ${{ always() && github.event_name != 'pull_request' && needs.news.result == 'failure' }}
+    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.news.result == 'failure' }}
     needs: [news]
     runs-on: ubuntu-latest
     timeout-minutes: 3
