@@ -181,3 +181,13 @@ A new, separate [Daily Trending Intelligence workflow](.github/workflows/daily-t
 **Safe verification:** Pull requests run all offline tests and also `python trending_radar.py --dry-run --test-mode` to fetch real public feeds and render a preview **without sending Telegram messages**. Production publishing runs only for the daily schedule or explicit manual dispatch, **not** immediately after merging. For a voluntary channel test, open GitHub Actions → Daily Trending Intelligence → Run workflow, with `test_mode: true`; this posts a public **TEST RUN** and does not mark stories delivered. Avoid repeated manual tests on a public channel. To reproduce an unsent preview locally: `python trending_radar.py --dry-run --test-mode`.
 
 Note: Scheduled GitHub jobs can start late or occasionally be omitted, and news sources may be unavailable.
+
+## 13. Duplicate Telegram notification troubleshooting
+
+**Official channel publishing:** The technical radar posts only on scheduled runs or explicit manual workflow dispatch; code pushes and pull requests run offline tests instead. This prevents one unnecessary public notification during every deployment.
+
+**Shared deduplication:** The technical collector checks both `state/seen.json` and `state/trending_seen.json`; the morning trending collector already checks both. The technical collector also groups obvious same-event title variations such as "Gemini 4 Argon" versus "Gemini 4 Argon for Robotics" while leaving distinct numbered versions separate. Failed delivery never marks items as sent. `test_mode` intentionally permits repeats, with a clearly labeled TEST RUN.
+
+**External/legacy publisher:** The plaintext message starting `📰 New AI / DevOps headlines` and ending `Automated RSS headlines. Verify details in the linked sources.` does **not** come from the current repository's two Python reporters. If both this message and the formatted professional report reach your channel, check Telegram administrator bots and other Hermes, cron, GitHub, or hosted jobs still using the same channel and bot token. Disable the redundant sender at its own source; this repository cannot suppress posts made by separate processes.
+
+**At-least-once limitation:** Telegram sends and committing the Git state are not atomic. A failed state push after a successful send may cause a duplicate on the next run. Check the corresponding GitHub Actions logs before manually rerunning production mode.
