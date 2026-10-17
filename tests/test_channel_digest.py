@@ -38,6 +38,17 @@ class ClassificationTests(unittest.TestCase):
         self.assertIsNotNone(digest.classify(sample, it)[0])
         self.assertIsNone(digest.classify(sample, software)[0])
 
+    def test_social_network_headline_is_not_it_operations(self):
+        sample = story("New social network for developers", "https://example.org/social")
+        it = self.config["channels"]["it_support"]["topics"]
+        self.assertIsNone(digest.classify(sample, it)[0])
+
+    def test_cloudflare_marketing_headline_is_not_it_ops(self):
+        sample = story("Cloudflare and OpenAI announce AI discovery initiative",
+                       "https://example.org/marketing")
+        it = self.config["channels"]["it_support"]["topics"]
+        self.assertIsNone(digest.classify(sample, it)[0])
+
     def test_frontend_only_goes_to_software(self):
         sample = story("Next.js and Vue frontend changes", "https://example.org/frontend")
         self.assertIsNone(digest.classify(sample, self.config["channels"]["it_support"]["topics"])[0])
