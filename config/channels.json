@@ -1,0 +1,202 @@
+{
+  "version": 1,
+  "timezone": "Asia/Phnom_Penh",
+  "max_stories_per_channel": 5,
+  "feeds": [
+    {
+      "name": "Cloudflare Blog",
+      "url": "https://blog.cloudflare.com/rss/",
+      "channels": [
+        "it_support",
+        "software"
+      ]
+    },
+    {
+      "name": "Kubernetes Blog",
+      "url": "https://kubernetes.io/feed.xml",
+      "channels": [
+        "it_support",
+        "software"
+      ]
+    },
+    {
+      "name": "GitHub Blog",
+      "url": "https://github.blog/feed/",
+      "channels": [
+        "it_support",
+        "software"
+      ]
+    },
+    {
+      "name": "Hacker News",
+      "url": "https://hnrss.org/frontpage",
+      "channels": [
+        "it_support",
+        "software"
+      ]
+    },
+    {
+      "name": "Python Blog",
+      "url": "https://blog.python.org/rss.xml",
+      "channels": [
+        "software"
+      ]
+    },
+    {
+      "name": "Hugging Face",
+      "url": "https://huggingface.co/blog/feed.xml",
+      "channels": [
+        "software"
+      ]
+    },
+    {
+      "name": "Google AI Blog",
+      "url": "https://blog.google/innovation-and-ai/technology/ai/rss/",
+      "channels": [
+        "software"
+      ]
+    }
+  ],
+  "channels": {
+    "it_support": {
+      "title": "IT Support Engineer 24/7 Daily Tips",
+      "chat_id": "@botsupportive",
+      "emoji": "🛡️",
+      "topics": {
+        "Security & Incident Response": [
+          "cve",
+          "vulnerability",
+          "patch",
+          "ransomware",
+          "malware",
+          "phishing",
+          "zero-day",
+          "breach",
+          "exploit",
+          "incident response",
+          "security advisory",
+          "threat",
+          "mitigation"
+        ],
+        "Cloud & Infrastructure": [
+          "kubernetes",
+          "docker",
+          "container",
+          "cloudflare",
+          "cloud service",
+          "cloud infrastructure",
+          "outage",
+          "server",
+          "linux",
+          "windows server",
+          "system administrator",
+          "sysadmin",
+          "storage",
+          "backup",
+          "monitoring",
+          "observability",
+          "downtime",
+          "availability"
+        ],
+        "Networking & IT Operations": [
+          "dns",
+          "vpn",
+          "network",
+          "router",
+          "firewall",
+          "endpoint",
+          "help desk",
+          "helpdesk",
+          "it support",
+          "troubleshooting",
+          "latency",
+          "authentication",
+          "identity",
+          "access control",
+          "certificate",
+          "disaster recovery",
+          "incident",
+          "uptime"
+        ]
+      }
+    },
+    "software": {
+      "title": "Software-Engineer work-life Daily Digest",
+      "chat_id": "@sedev2027",
+      "emoji": "💻",
+      "topics": {
+        "Frontend & Full Stack": [
+          "next.js",
+          "react",
+          "vue",
+          "nuxt",
+          "typescript",
+          "javascript",
+          "frontend",
+          "front-end",
+          "full-stack",
+          "angular",
+          "web development",
+          "browser",
+          "vite",
+          "css",
+          "web framework"
+        ],
+        "Backend & Data": [
+          "spring boot",
+          "java",
+          "node.js",
+          "fastapi",
+          "python",
+          "rest api",
+          "graphql",
+          "api",
+          "postgresql",
+          "mongodb",
+          "redis",
+          "backend",
+          "back-end",
+          "database",
+          "microservice",
+          "sql",
+          "kafka"
+        ],
+        "Developer Tools & AI": [
+          "developer",
+          "software engineering",
+          "programming",
+          "github",
+          "git",
+          "copilot",
+          "coding",
+          "code editor",
+          "llm",
+          "ai agent",
+          "ai coding",
+          "open source",
+          "devtools",
+          "ide",
+          "compiler",
+          "framework",
+          "code review",
+          "test automation"
+        ],
+        "Engineering Reliability": [
+          "devops",
+          "ci/cd",
+          "continuous integration",
+          "dependency",
+          "supply chain",
+          "kubernetes",
+          "docker",
+          "deployment",
+          "security patch",
+          "vulnerability",
+          "observability",
+          "testing",
+          "release"
+        ]
+      }
+    }
+  }
+}
