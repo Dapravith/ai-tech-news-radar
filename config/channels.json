@@ -82,7 +82,6 @@
           "kubernetes",
           "docker",
           "container",
-          "cloudflare",
           "cloud service",
           "cloud infrastructure",
           "outage",
@@ -96,12 +95,15 @@
           "monitoring",
           "observability",
           "downtime",
-          "availability"
+          "availability",
+          "cloudflare outage",
+          "cloudflare workers",
+          "cloudflare firewall",
+          "cloudflare security"
         ],
         "Networking & IT Operations": [
           "dns",
           "vpn",
-          "network",
           "router",
           "firewall",
           "endpoint",
@@ -116,7 +118,12 @@
           "certificate",
           "disaster recovery",
           "incident",
-          "uptime"
+          "uptime",
+          "network outage",
+          "network security",
+          "network monitoring",
+          "networking",
+          "network operations"
         ]
       }
     },
