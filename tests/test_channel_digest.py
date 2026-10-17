@@ -65,7 +65,8 @@ class ClassificationTests(unittest.TestCase):
         sample["category"] = "Security & Incident Response"
         message = digest.render(self.config["channels"]["it_support"], [sample], NOW)
         self.assertNotIn("<script>", message)
-        self.assertIn("&lt;script&gt;", message)
+        self.assertIn("Security patch alert(1)", message)
+        self.assertNotIn("<script", message)
 
 
 class DeliveryTests(unittest.TestCase):
