@@ -2,10 +2,7 @@
 name: AI Tech Radar - Every 3 Hours
 
 on:
-  schedule:
-    # Every 3 hours except 09:00 Cambodia (reserved for daily trending)
-    # Cambodia: 12, 15, 18, 21, 00, 03, 06
-    - cron: "0 5,8,11,14,17,20,23 * * *"
+  # Legacy three-hour publisher is manual-only after two-channel migration.
 
   push:
     branches: [main]
