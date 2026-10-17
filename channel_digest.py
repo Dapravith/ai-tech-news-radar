@@ -184,9 +184,7 @@ def render(channel: dict, stories: list[dict], now: datetime,
     ])
     message = "\n".join(lines)
     if len(message) > MAX_MESSAGE:
-        if not stories:
-            raise ValueError("Empty digest is too long")
-        return render(channel, stories[:-1], now, test_mode=test_mode, partial=partial)
+        raise ValueError("Digest exceeds Telegram message limit")
     return message
 
 
@@ -227,8 +225,17 @@ def run(config: dict, state_path: Path, *, dry_run: bool,
         stories = choose_stories(articles, channel, now, previously_sent(state, key),
                                 test_mode=test_mode,
                                 limit=int(config.get("max_stories_per_channel", 5)))
-        message = render(channel, stories, now, test_mode=test_mode,
-                         partial=any(name in failed for name in sources))
+        # Use the exact subset that fits into Telegram. Never mark articles
+        # delivered if the formatter had to remove them for message length.
+        while True:
+            try:
+                message = render(channel, stories, now, test_mode=test_mode,
+                                 partial=any(name in failed for name in sources))
+                break
+            except ValueError:
+                if not stories:
+                    raise
+                stories = stories[:-1]
         OUT_DIR.mkdir(exist_ok=True)
         (OUT_DIR / f"{key}_latest.html").write_text(message + "\n", encoding="utf-8")
         logging.info("%s: %d selected stories, %d working feeds", key, len(stories), len(healthy))
