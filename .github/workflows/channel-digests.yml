@@ -1,0 +1,176 @@
+name: Two Telegram Digests - 8 AM Cambodia
+
+on:
+  schedule:
+    # GitHub cron is UTC; Cambodia is UTC+7 year-round.
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Publish labelled TEST posts without updating delivery state'
+        type: boolean
+        required: false
+        default: true
+      dry_run:
+        description: 'Only preview RSS content; do not post to Telegram'
+        type: boolean
+        required: false
+        default: false
+  pull_request:
+    paths:
+      - 'channel_digest.py'
+      - 'news_radar.py'
+      - 'config/channels.json'
+      - 'tests/**'
+      - '.github/workflows/channel-digests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'channel_digest.py'
+      - 'news_radar.py'
+      - 'config/channels.json'
+      - 'tests/**'
+      - '.github/workflows/channel-digests.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: two-channel-telegram-digests
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests -v
+
+  rss-preview:
+    if: github.event_name == 'pull_request'
+    needs: [tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Smoke test real RSS feeds without publishing
+        run: python channel_digest.py --dry-run --test-mode
+      - name: Upload independent channel previews
+        if: ${{ success() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: preview-it-and-software-channels
+          path: out/*_latest.html
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TEST_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.test_mode == true && 'true' || 'false' }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && 'true' || 'false' }}
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Collect, filter and deliver to both channels
+        id: delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "$TEST_MODE" = 'true' ]; then args+=(--test-mode); fi
+          if [ "$DRY_RUN" = 'true' ]; then args+=(--dry-run); fi
+          python channel_digest.py "${args[@]}"
+      - name: Save digest previews
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: telegram-channel-digests
+          path: out/*_latest.html
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Persist successful channel deliveries (even after partial failure)
+        if: ${{ (success() || failure()) && steps.delivery.outcome != 'skipped' && env.TEST_MODE != 'true' && env.DRY_RUN != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot="$RUNNER_TEMP/channel-seen.json"
+          cp state/channel_seen.json "$snapshot"
+          git config user.name "ai-tech-radar[bot]"
+          git config user.email "ai-tech-radar[bot]@users.noreply.github.com"
+
+          for attempt in 1 2 3; do
+            git fetch --no-tags origin main
+            git reset --hard origin/main
+            python channel_digest.py --merge-state "$snapshot"
+            git add state/channel_seen.json
+            if git diff --cached --quiet; then
+              echo 'Delivery state already recorded'
+              exit 0
+            fi
+            git commit -m "chore: remember per-channel deliveries [skip ci]"
+            if git push origin HEAD:main; then
+              echo 'Per-channel delivery state saved'
+              exit 0
+            fi
+            echo "::warning::State push conflict, retrying ($attempt/3)"
+            sleep "$attempt"
+          done
+          echo '::error::Telegram may have posted, but state was not persisted'
+          exit 1
+
+  notify-failure:
+    if: ${{ always() && needs.publish.result == 'failure' }}
+    needs: [publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - name: Send private failure alert when configured
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from urllib.request import Request, urlopen
+          token = os.getenv('TELEGRAM_BOT_TOKEN', '')
+          chat = os.getenv('TELEGRAM_CHAT_ID', '')
+          if not token or not chat:
+              print('Private alert not configured; inspect workflow logs')
+              raise SystemExit(0)
+          run = (f"https://github.com/{os.environ['GITHUB_REPOSITORY']}"
+                 f"/actions/runs/{os.environ['GITHUB_RUN_ID']}")
+          payload = json.dumps({'chat_id': chat,
+                                'text': '🔴 TWO-CHANNEL NEWS DIGEST FAILED\n' + run,
+                                'disable_web_page_preview': True}).encode('utf-8')
+          request = Request('https://api.telegram.org/bot' + token + '/sendMessage',
+                            data=payload, headers={'Content-Type': 'application/json'},
+                            method='POST')
+          try:
+              with urlopen(request, timeout=20) as response:
+                  if not json.load(response).get('ok'):
+                      raise ValueError('Telegram declined alert')
+          except Exception:
+              raise SystemExit('Unable to send private failure alert') from None
+          PY

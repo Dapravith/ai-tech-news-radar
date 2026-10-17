@@ -1,9 +1,7 @@
 name: Daily Trending Intelligence - 9 AM Cambodia
 
 on:
-  schedule:
-    - cron: "0 9 * * *"
-      timezone: "Asia/Phnom_Penh"
+  # Legacy 09:00 trending publisher is manual-only after migration.
   workflow_dispatch:
     inputs:
       test_mode:
