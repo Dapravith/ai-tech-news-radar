@@ -1,1 +1,21 @@
-{}
+{
+  "it_support": {
+    "2026-10-18": {
+      "delivered": true,
+      "ids": [
+        "aca39a43280b93ce5627cc"
+      ]
+    }
+  },
+  "software": {
+    "2026-10-18": {
+      "delivered": true,
+      "ids": [
+        "02427232eda6c5bcac052f",
+        "5cf8bc3a52e1e15c3bc18e",
+        "6cb03e9bf9e925e4d4802a",
+        "aca39a43280b93ce5627cc"
+      ]
+    }
+  }
+}
