@@ -5,6 +5,10 @@
       "ids": [
         "aca39a43280b93ce5627cc"
       ]
+    },
+    "2026-10-19": {
+      "delivered": true,
+      "ids": []
     }
   },
   "software": {
@@ -15,6 +19,16 @@
         "5cf8bc3a52e1e15c3bc18e",
         "6cb03e9bf9e925e4d4802a",
         "aca39a43280b93ce5627cc"
+      ]
+    },
+    "2026-10-19": {
+      "delivered": true,
+      "ids": [
+        "313154ba192d9eb57caa97",
+        "3e28c483fe65e118634ca2",
+        "4745476b2cf5984c1b195e",
+        "ae6e49210029e41a672a7f",
+        "f62fed20b13b1ce73478d1"
       ]
     }
   }
