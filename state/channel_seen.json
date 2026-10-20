@@ -9,6 +9,16 @@
     "2026-10-19": {
       "delivered": true,
       "ids": []
+    },
+    "2026-10-20": {
+      "delivered": true,
+      "ids": [
+        "5dfdef99ab43360bd6b1cc",
+        "88b5537c8caf6d2d1931d0",
+        "94b00070d9730e6c1637bc",
+        "e9f92482846f8838164ea6",
+        "f6ae6db404fd89fd2fc95b"
+      ]
     }
   },
   "software": {
@@ -29,6 +39,14 @@
         "4745476b2cf5984c1b195e",
         "ae6e49210029e41a672a7f",
         "f62fed20b13b1ce73478d1"
+      ]
+    },
+    "2026-10-20": {
+      "delivered": true,
+      "ids": [
+        "1be45fb0ef68a5f78aff9b",
+        "55c3c0be518a12ff39df3c",
+        "e9f92482846f8838164ea6"
       ]
     }
   }
