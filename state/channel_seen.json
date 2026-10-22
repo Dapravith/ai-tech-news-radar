@@ -25,6 +25,15 @@
       "ids": [
         "89ce05d8461e33ce27fb43"
       ]
+    },
+    "2026-10-22": {
+      "delivered": true,
+      "ids": [
+        "d3ada9751f69e0ee0e4cf1",
+        "de9db6f384cbc788775550",
+        "e3761e36fe6bed99e78dc4",
+        "ebabe0d9fb3e1910dce664"
+      ]
     }
   },
   "software": {
@@ -63,6 +72,16 @@
         "89ce05d8461e33ce27fb43",
         "a6ab227ca9e0079f77ea9c",
         "c59142aad3a717b875d200"
+      ]
+    },
+    "2026-10-22": {
+      "delivered": true,
+      "ids": [
+        "885fe3c67de05637ce5b96",
+        "d3ada9751f69e0ee0e4cf1",
+        "e6a2cdcd124f377d8beaa2",
+        "ebabe0d9fb3e1910dce664",
+        "f4b3d479520df5a35eec5f"
       ]
     }
   }
