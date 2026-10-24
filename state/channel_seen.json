@@ -42,6 +42,14 @@
         "eaf6e95c99cc41352edb71",
         "fef8c35062d2162078d8e5"
       ]
+    },
+    "2026-10-24": {
+      "delivered": true,
+      "ids": [
+        "3513b9999983f116ac8c5e",
+        "36bdd90b32e8f9f32fdf22",
+        "9254e490d6dfe49fcd7196"
+      ]
     }
   },
   "software": {
@@ -99,6 +107,14 @@
         "63640e7cc1c616d4277097",
         "e3761e36fe6bed99e78dc4",
         "eaf6e95c99cc41352edb71"
+      ]
+    },
+    "2026-10-24": {
+      "delivered": true,
+      "ids": [
+        "332b8a0f3c708eb7e8baac",
+        "3513b9999983f116ac8c5e",
+        "4fb051deb678302903457c"
       ]
     }
   }
