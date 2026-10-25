@@ -50,6 +50,10 @@
         "36bdd90b32e8f9f32fdf22",
         "9254e490d6dfe49fcd7196"
       ]
+    },
+    "2026-10-25": {
+      "delivered": true,
+      "ids": []
     }
   },
   "software": {
@@ -115,6 +119,13 @@
         "332b8a0f3c708eb7e8baac",
         "3513b9999983f116ac8c5e",
         "4fb051deb678302903457c"
+      ]
+    },
+    "2026-10-25": {
+      "delivered": true,
+      "ids": [
+        "0d165f484c2636ca4e217c",
+        "c852cf262baca51dc366fc"
       ]
     }
   }
