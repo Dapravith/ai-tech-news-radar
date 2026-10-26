@@ -49,8 +49,8 @@
       ]
     },
     {
-      "name": "CISA Alerts",
-      "url": "https://www.cisa.gov/cybersecurity-advisories/alerts.xml",
+      "name": "UK NCSC News",
+      "url": "https://www.ncsc.gov.uk/api/1/services/v1/news-rss-feed.xml",
       "channels": [
         "it_support",
         "software"
