@@ -1,7 +1,9 @@
 name: Daily Trending Intelligence - 9 AM Cambodia
 
 on:
-  # Legacy 09:00 trending publisher is manual-only after migration.
+  schedule:
+    # 09:09 Cambodia time (02:09 UTC). GitHub may delay scheduled starts.
+    - cron: '9 2 * * *'
   workflow_dispatch:
     inputs:
       test_mode:
@@ -74,7 +76,7 @@ jobs:
       contents: write
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHANNEL_ID: '@MyAITechRadar'
+      TELEGRAM_CHANNEL_ID: '@dailynewsagents'
       TEST_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.test_mode && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v5
