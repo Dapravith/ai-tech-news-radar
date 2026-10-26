@@ -22,6 +22,22 @@ class NewsRadarTest(unittest.TestCase):
     def test_atom(self):
         self.assertEqual(parse_feed(ATOM, 'AI')[0]['url'], 'https://example.org/agent')
 
+    def test_google_news_rss_preserves_original_publisher(self):
+        feed = b'''<?xml version="1.0"?><rss version="2.0"><channel>
+        <item><title>Cambodia economic outlook</title>
+        <link>https://news.google.com/rss/articles/123</link>
+        <pubDate>Mon, 26 Oct 2026 04:00:00 GMT</pubDate>
+        <source url="https://www.khmertimeskh.com/">Khmer Times</source>
+        </item></channel></rss>'''
+        selected = parse_feed(feed, "Google News Cambodia")
+        self.assertEqual(selected[0]["publisher"], "Khmer Times")
+        self.assertEqual(selected[0]["source"], "Google News Cambodia")
+
+    def test_high_trust_feed_registration(self):
+        self.assertIn("CISA Alerts", news_radar.FEEDS)
+        self.assertIn("Spring Blog", news_radar.FEEDS)
+        self.assertNotIn("Hacker News", news_radar.FEEDS)
+
     def test_sanitization(self):
         self.assertEqual(clean('<b>AI</b> &amp; cloud'), 'AI & cloud')
         self.assertEqual(normalize_url('javascript:alert(1)'), '')
