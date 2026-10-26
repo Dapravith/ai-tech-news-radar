@@ -33,7 +33,7 @@ class ClassificationTests(unittest.TestCase):
 
     def test_primary_feeds_replace_social_ranked_links(self):
         feeds = {feed["name"] for feed in self.config["feeds"]}
-        self.assertIn("CISA Alerts", feeds)
+        self.assertIn("UK NCSC News", feeds)
         self.assertIn("Spring Blog", feeds)
         self.assertNotIn("Hacker News", feeds)
 
