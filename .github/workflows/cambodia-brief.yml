@@ -1,0 +1,163 @@
+name: Cambodia News Brief - Morning and Evening ICT
+
+on:
+  schedule:
+    # Cambodia ICT is UTC+7. Off the hour to reduce GitHub scheduler contention.
+    - cron: '23 0 * * *'   # 07:23 ICT, morning
+    - cron: '53 0 * * *'   # 07:53 ICT, morning recovery
+    - cron: '13 11 * * *'  # 18:13 ICT, evening
+    - cron: '43 11 * * *'  # 18:43 ICT, evening recovery
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Send clearly labelled test reports without saving state'
+        required: false
+        type: boolean
+        default: true
+      dry_run:
+        description: 'Preview only; never send a Telegram message'
+        required: false
+        type: boolean
+        default: true
+  pull_request:
+    paths:
+      - 'cambodia_brief.py'
+      - 'news_radar.py'
+      - 'tests/**'
+      - '.github/workflows/cambodia-brief.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cambodia_brief.py'
+      - 'news_radar.py'
+      - 'tests/**'
+      - '.github/workflows/cambodia-brief.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cambodia-morning-evening-report
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests -v
+
+  rss-preview:
+    if: github.event_name == 'pull_request'
+    needs: [tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify live Cambodia publishers without Telegram
+        run: python cambodia_brief.py --dry-run --test-mode
+      - uses: actions/upload-artifact@v6
+        with:
+          name: cambodia-news-preview
+          path: out/cambodia_latest.html
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      # Optional: user must provide a private news chat ID as an Actions secret.
+      TELEGRAM_NEWS_CHAT_ID: ${{ secrets.TELEGRAM_NEWS_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}
+      TELEGRAM_NEWS_CHANNEL_ID: '@dailynewsagents'
+      TEST_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.test_mode == true && 'true' || 'false' }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && 'true' || 'false' }}
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Collect and deliver curated Cambodia headlines
+        id: delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "$TEST_MODE" = 'true' ]; then args+=(--test-mode); fi
+          if [ "$DRY_RUN" = 'true' ]; then args+=(--dry-run); fi
+          python cambodia_brief.py "${args[@]}"
+      - name: Preserve report preview
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cambodia-brief-report
+          path: out/cambodia_latest.html
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Persist acknowledged deliveries, including partial successes
+        if: ${{ (success() || failure()) && steps.delivery.outcome != 'skipped' && env.TEST_MODE != 'true' && env.DRY_RUN != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot="${RUNNER_TEMP}/cambodia-delivery-state.json"
+          cp state/cambodia_seen.json "$snapshot"
+          git config user.name "ai-tech-radar[bot]"
+          git config user.email "ai-tech-radar[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git fetch --no-tags origin main
+            git reset --hard origin/main
+            python cambodia_brief.py --merge-state "$snapshot"
+            git add state/cambodia_seen.json
+            if git diff --cached --quiet; then exit 0; fi
+            git commit -m "chore: remember Cambodia news delivery [skip ci]"
+            if git push origin HEAD:main; then exit 0; fi
+            sleep "$attempt"
+          done
+          echo "::error::Delivery state persistence failed; check before retrying"
+          exit 1
+
+  notify-failure:
+    if: ${{ always() && needs.publish.result == 'failure' }}
+    needs: [publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - name: Send private operational alert
+        run: |
+          python - <<'PY'
+          import json, os
+          from urllib.request import Request, urlopen
+          token, dest = os.getenv('TELEGRAM_BOT_TOKEN', ''), os.getenv('TELEGRAM_CHAT_ID', '')
+          if not token or not dest:
+              print('No private operational alert destination')
+              raise SystemExit(0)
+          run = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          body = json.dumps({'chat_id': dest,
+            'text': '🔴 CAMBODIA NEWS DELIVERY FAILED\n' + run,
+            'disable_web_page_preview': True}).encode()
+          req = Request('https://api.telegram.org/bot' + token + '/sendMessage',
+                        data=body, headers={'Content-Type':'application/json'}, method='POST')
+          with urlopen(req, timeout=20) as result:
+              if not json.load(result).get('ok'):
+                  raise SystemExit('Telegram rejected failure alert')
+          PY

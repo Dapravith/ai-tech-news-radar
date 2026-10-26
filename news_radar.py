@@ -30,7 +30,10 @@ FEEDS = {
     'Google AI Blog': 'https://blog.google/innovation-and-ai/technology/ai/rss/',
     'Hugging Face': 'https://huggingface.co/blog/feed.xml',
     'GitHub Blog': 'https://github.blog/feed/',
-    'Hacker News': 'https://hnrss.org/frontpage',
+    # Community discussion is not independently verified reporting; exclude
+    # Hacker News from production news publication.
+    'UK NCSC News': 'https://www.ncsc.gov.uk/api/1/services/v1/news-rss-feed.xml',
+    'Spring Blog': 'https://spring.io/blog.atom',
     'Cloudflare Blog': 'https://blog.cloudflare.com/rss/',
     'Kubernetes Blog': 'https://kubernetes.io/feed.xml',
     'Python Blog': 'https://blog.python.org/rss.xml',
@@ -123,8 +126,15 @@ def parse_feed(raw: bytes, source: str) -> list[dict]:
         url = normalize_url(get_link(node))
         pub = parse_datetime(child_text(node, {'pubdate', 'published', 'updated', 'date'}))
         summary = clean(child_text(node, {'description', 'summary', 'content'}), 300)
+        # Google News is an index, not an original publisher. RSS <source>
+        # identifies the outlet that reported a headline; never attribute
+        # its claims to Google News itself.
+        publisher = clean(child_text(node, {'source'}), 100) if source.startswith('Google News') else ''
         if title and url and pub:
-            items.append({'title': title, 'url': url, 'published': pub, 'source': source, 'summary': summary})
+            item = {'title': title, 'url': url, 'published': pub, 'source': source, 'summary': summary}
+            if publisher:
+                item['publisher'] = publisher
+            items.append(item)
     return items
 
 
@@ -146,8 +156,10 @@ def score(item: dict, now: datetime) -> float:
             points += weight * 2
         elif re.search(pattern, description):
             points += weight * 0.5
-    if item['source'] in ('OpenAI News', 'Google AI Blog', 'Hugging Face', 'GitHub Blog', 'Kubernetes Blog', 'Cloudflare Blog', 'Python Blog'):
-        points += 2
+    if item['source'] in ('OpenAI News', 'Google AI Blog', 'Hugging Face', 'GitHub Blog', 'Kubernetes Blog', 'Cloudflare Blog', 'Python Blog', 'Spring Blog', 'UK NCSC News'):
+        # Primary vendor/maintainer and public agency announcements are the
+        # authoritative source for their own changes; not independent validation.
+        points += 3
     hours = max((now - item['published']).total_seconds() / 3600, 0)
     return points + max(0, 24 - hours) / 15
 
@@ -182,8 +194,30 @@ def read_seen_state(path: Path) -> dict:
     return parsed
 
 
+def balanced_sources(items: list[dict], limit: int = 5, max_per_source: int = 2) -> list[dict]:
+    """Prefer multiple independently maintained feeds without inventing a story."""
+    selected, counts = [], {}
+    for item in items:
+        source = item.get('source', '')
+        if counts.get(source, 0) >= max_per_source:
+            continue
+        selected.append(item)
+        counts[source] = counts.get(source, 0) + 1
+        if len(selected) >= limit:
+            return selected
+    # If the news window genuinely has fewer sources, fill the remaining slots.
+    existing = {item['id'] for item in selected}
+    for item in items:
+        if len(selected) >= limit:
+            break
+        if item['id'] not in existing:
+            selected.append(item)
+            existing.add(item['id'])
+    return selected
+
+
 def select_items(items: list[dict], seen: dict, now: datetime, test_mode: bool, limit: int = 5) -> list[dict]:
-    age = timedelta(days=7) if test_mode else timedelta(hours=40)
+    age = timedelta(days=7) if test_mode else timedelta(hours=24)
     shortlist = []
     for item in items:
         if now - age > item['published'] or item['published'] > now + timedelta(hours=4):
@@ -202,7 +236,7 @@ def select_items(items: list[dict], seen: dict, now: datetime, test_mode: bool, 
         unique.append(item)
         if len(unique) >= 22:
             break
-    return unique[:limit] if not os.getenv('OPENROUTER_API_KEY') else unique
+    return balanced_sources(unique, limit) if not os.getenv('OPENROUTER_API_KEY') else unique
 
 
 def shorten_sentence(value: str, size: int = 165) -> str:
@@ -285,11 +319,13 @@ def ai_summarize(items: list[dict]) -> list[dict]:
                 break
         if len(selected) >= 2:
             logging.info('Free AI refinement successful: %d stories', len(selected))
-            return selected
+            return balanced_sources(
+                selected + [i for i in items if i['id'] not in used], len(selected)
+            )
         logging.warning('AI returned insufficient usable IDs, using deterministic fallback')
     except Exception as exc:
         logging.warning('Free model unavailable (%s); falling back to deterministic digest', exc)
-    return items[:5]
+    return balanced_sources(items, 5)
 
 
 def fallback_summary(item: dict) -> str:

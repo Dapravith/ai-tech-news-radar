@@ -31,6 +31,12 @@ class ClassificationTests(unittest.TestCase):
         for channel in self.config["channels"].values():
             self.assertEqual(digest.classify(sample, channel["topics"])[0], None)
 
+    def test_primary_feeds_replace_social_ranked_links(self):
+        feeds = {feed["name"] for feed in self.config["feeds"]}
+        self.assertIn("UK NCSC News", feeds)
+        self.assertIn("Spring Blog", feeds)
+        self.assertNotIn("Hacker News", feeds)
+
     def test_it_security_only_goes_to_it(self):
         sample = story("Ransomware incident hits corporate network", "https://example.org/security")
         it = self.config["channels"]["it_support"]["topics"]

@@ -17,6 +17,7 @@ def article(category="Cambodia", number=0, age=2, title=None):
     return {
         "category": category,
         "source": "BBC World" if category != "Cambodia" else "Google News Cambodia",
+        "publisher": "Khmer Times" if category == "Cambodia" else "",
         "title": title or f"Major {category} headline number {number}",
         "url": f"https://example.org/{category.lower()}/{number}",
         "published": NOW - timedelta(hours=age),
@@ -65,6 +66,28 @@ class TrendingRadarTests(unittest.TestCase):
         ), [])
         self.assertEqual(len(radar.select_stories([first], {
             radar.article_id(first["url"]): NOW.isoformat()}, NOW, test_mode=True)), 1)
+
+    def test_unknown_indexed_publishers_are_excluded(self):
+        unknown = article("Cambodia", 3)
+        unknown["publisher"] = "Unverified Clickbait Site"
+        missing = dict(article("Cambodia", 4))
+        missing.pop("publisher")
+        reputable = article("Cambodia", 5)
+        selected = radar.select_stories([unknown, missing, reputable], {}, NOW)
+        self.assertEqual([s["title"] for s in selected], [reputable["title"]])
+
+    def test_direct_reporter_ranks_above_index_at_same_age(self):
+        indexed = dict(article("World", 4), source="Google News World", publisher="BBC News")
+        direct = dict(indexed, source="BBC World",
+                      url="https://www.bbc.com/news/a")
+        self.assertGreater(radar.score(direct, NOW), radar.score(indexed, NOW))
+
+    def test_google_news_report_has_original_publisher_attribution(self):
+        item = article("Cambodia", 9)
+        report, selected = radar.render_report([item], NOW)
+        self.assertEqual(len(selected), 1)
+        self.assertIn("Google News Cambodia / Khmer Times (indexed)", report)
+        self.assertNotIn("originally reported by Google", report)
 
     def test_stale_future_invalid_and_javascript_are_filtered(self):
         stale = article(age=80)
