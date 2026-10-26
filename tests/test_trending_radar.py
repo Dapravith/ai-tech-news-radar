@@ -77,9 +77,9 @@ class TrendingRadarTests(unittest.TestCase):
         self.assertEqual([s["title"] for s in selected], [reputable["title"]])
 
     def test_direct_reporter_ranks_above_index_at_same_age(self):
-        indexed = article("Cambodia", 4)
-        direct = dict(indexed, source="Khmer Times",
-                      url="https://www.khmertimeskh.com/a")
+        indexed = dict(article("World", 4), source="Google News World", publisher="BBC News")
+        direct = dict(indexed, source="BBC World",
+                      url="https://www.bbc.com/news/a")
         self.assertGreater(radar.score(direct, NOW), radar.score(indexed, NOW))
 
     def test_google_news_report_has_original_publisher_attribution(self):
