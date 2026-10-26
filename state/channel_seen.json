@@ -54,6 +54,10 @@
     "2026-10-25": {
       "delivered": true,
       "ids": []
+    },
+    "2026-10-26": {
+      "delivered": true,
+      "ids": []
     }
   },
   "software": {
@@ -126,6 +130,14 @@
       "ids": [
         "0d165f484c2636ca4e217c",
         "c852cf262baca51dc366fc"
+      ]
+    },
+    "2026-10-26": {
+      "delivered": true,
+      "ids": [
+        "07c54f2501b84418ad43d4",
+        "240888442444abd5f79d44",
+        "b7430d49dae6956a5b9417"
       ]
     }
   }
