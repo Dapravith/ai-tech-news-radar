@@ -46,6 +46,27 @@ jobs:
           python-version: '3.12'
       - run: python -m unittest discover -s tests -v
 
+  rss-preview:
+    if: github.event_name == 'pull_request'
+    needs: [unit-tests]
+    name: Live RSS preview - no Telegram
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Collect real headlines without publishing
+        run: python news_radar.py --dry-run --test-mode
+      - name: Upload preview
+        uses: actions/upload-artifact@v6
+        with:
+          name: three-hour-tech-preview
+          path: out/latest.txt
+          if-no-files-found: error
+          retention-days: 3
+
   news:
     # Deploying code should not create extra public posts.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
