@@ -28,14 +28,6 @@
       ]
     },
     {
-      "name": "Hacker News",
-      "url": "https://hnrss.org/frontpage",
-      "channels": [
-        "it_support",
-        "software"
-      ]
-    },
-    {
       "name": "Python Blog",
       "url": "https://blog.python.org/rss.xml",
       "channels": [
@@ -52,6 +44,21 @@
     {
       "name": "Google AI Blog",
       "url": "https://blog.google/innovation-and-ai/technology/ai/rss/",
+      "channels": [
+        "software"
+      ]
+    },
+    {
+      "name": "CISA Alerts",
+      "url": "https://www.cisa.gov/cybersecurity-advisories/alerts.xml",
+      "channels": [
+        "it_support",
+        "software"
+      ]
+    },
+    {
+      "name": "Spring Blog",
+      "url": "https://spring.io/blog.atom",
       "channels": [
         "software"
       ]
@@ -76,7 +83,9 @@
           "incident response",
           "security advisory",
           "threat",
-          "mitigation"
+          "mitigation",
+          "known exploited vulnerabilities",
+          "kev catalog"
         ],
         "Cloud & Infrastructure": [
           "kubernetes",
@@ -166,7 +175,9 @@
           "database",
           "microservice",
           "sql",
-          "kafka"
+          "kafka",
+          "spring cloud",
+          "spring ai"
         ],
         "Developer Tools & AI": [
           "developer",
