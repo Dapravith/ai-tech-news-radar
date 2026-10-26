@@ -19,9 +19,9 @@ The schedules are **best effort**. GitHub Actions may delay or occasionally skip
 ## Trusted sources and news quality
 
 - **World / business / culture:** BBC News, The Guardian and Deutsche Welle (direct publisher feeds).
-- **Cambodia:** Khmer Times direct feed plus Google News indexing restricted to a reviewed publisher allowlist (for example Cambodianess, CamboJA News, Phnom Penh Post, Khmer Times, Reuters and AP). If a direct publisher feed fails, the digest can still use other available sources; its status is visible in the workflow logs.
-- **Science:** BBC Science and Nature (Nature is the publisher of original scientific research, not necessarily an independent verification of every claim).
-- **Technology / security:** GitHub, Kubernetes, Cloudflare, Python, Google AI, OpenAI, Hugging Face, Spring and official CISA alerts.
+- **Cambodia:** Google News indexing restricted to reviewed publishers (Cambodianess, CamboJA News, Phnom Penh Post, Khmer Times, Reuters and AP). Direct Khmer Times RSS returns HTTP 403 from GitHub-hosted runners, so it is not configured as an active feed.
+- **Science:** BBC Science and The Guardian Science. Nature was excluded after its RSS endpoint failed XML parsing in the cloud runner.
+- **Technology / security:** GitHub, Kubernetes, Cloudflare, Python, Google AI, OpenAI, Hugging Face, Spring, and the UK's National Cyber Security Centre (NCSC) official news feed. CISA's official RSS endpoint returned HTTP 403 from the cloud runner and is not an active source.
 - Hacker News community-ranked posts are excluded from automated production publication because a popular link is not confirmation of accuracy. Google News is treated as an *index*, never as the original reporter; unknown or missing Google publisher metadata is filtered out.
 - Source curation does **not** verify each article's claims, and vendor posts are primary statements about their own products. Each report retains the original or aggregator URL, timestamp and outlet attribution.
 - A published story must be dated within the production freshness window. An unavailable feed cannot produce invented or stale stories. Dry-run PR checks exercise real RSS retrieval.
