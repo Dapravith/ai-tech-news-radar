@@ -41,9 +41,12 @@ CAMBODIA_SEARCH = (
 FEEDS: dict[str, list[tuple[str, str]]] = {
     "World": [
         ("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml"),
+        ("The Guardian World", "https://www.theguardian.com/world/rss"),
+        ("Deutsche Welle World", "https://rss.dw.com/xml/rss-en-all"),
         ("Google News World", GOOGLE_TOPIC + "WORLD" + US_LOCALE),
     ],
     "Cambodia": [
+        ("Khmer Times", "https://www.khmertimeskh.com/feed/"),
         ("Google News Cambodia", CAMBODIA_SEARCH),
     ],
     "Technology": [
@@ -53,10 +56,12 @@ FEEDS: dict[str, list[tuple[str, str]]] = {
     ],
     "Business": [
         ("BBC Business", "https://feeds.bbci.co.uk/news/business/rss.xml"),
+        ("The Guardian Business", "https://www.theguardian.com/business/rss"),
         ("Google News Business", GOOGLE_TOPIC + "BUSINESS" + US_LOCALE),
     ],
     "Science": [
         ("BBC Science", "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"),
+        ("Nature", "https://www.nature.com/nature.rss"),
         ("Google News Science", GOOGLE_TOPIC + "SCIENCE" + US_LOCALE),
     ],
     "Sports": [
@@ -65,10 +70,30 @@ FEEDS: dict[str, list[tuple[str, str]]] = {
     ],
     "Culture": [
         ("BBC Culture", "https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml"),
+        ("The Guardian Culture", "https://www.theguardian.com/culture/rss"),
         ("Google News Culture", GOOGLE_TOPIC + "ENTERTAINMENT" + US_LOCALE),
     ],
 }
 CATEGORIES = tuple(FEEDS)
+
+# Google News aggregates many domains, including SEO spam and misleading
+# sources. An indexed headline is eligible only when the RSS <source> field
+# names an explicitly reviewed publisher. Curation is not a fact-check.
+TRUSTED_GOOGLE_PUBLISHERS = frozenset({
+    'associated press', 'ap news', 'reuters', 'afp', 'afp news',
+    'bbc news', 'bbc', 'the guardian', 'deutsche welle', 'dw',
+    'france 24', 'al jazeera english',
+    'cambodianess', 'khmer times', 'the phnom penh post', 'phnom penh post',
+    'camboja news', 'camboja', 'agence kampuchea presse',
+    'nature', 'github blog', 'cisa',
+})
+
+PREFERRED_DIRECT_SOURCES = frozenset({
+    'BBC World', 'BBC Technology', 'BBC Business', 'BBC Science',
+    'BBC Sport', 'BBC Culture', 'The Guardian World',
+    'The Guardian Business', 'The Guardian Culture',
+    'Deutsche Welle World', 'Nature', 'Khmer Times', 'GitHub Blog',
+})
 
 SIGNIFICANCE_TERMS = (
     "announces", "announced", "launches", "launched", "election", "agreement",
@@ -121,7 +146,8 @@ def score(item: dict, now: datetime) -> float:
     freshness = max(0.0, 40.0 * (1.0 - hours / 36.0))
     title = item["title"].casefold()
     significance = min(25.0, 5.0 * sum(term in title for term in SIGNIFICANCE_TERMS))
-    publisher = 15.0 if item["source"].startswith("BBC ") else 13.0 if item["source"] == "GitHub Blog" else 8.0
+    publisher = (15.0 if item["source"] in PREFERRED_DIRECT_SOURCES
+                 else 9.0 if item["source"].startswith("Google News") else 7.0)
     local_relevance = 10.0 if item["category"] == "Cambodia" else 0.0
     return round(freshness + significance + publisher + local_relevance, 2)
 
@@ -148,6 +174,12 @@ def select_stories(
             continue
         if not now - age <= published <= now + timedelta(hours=1):
             continue
+        # Google News is a secondary index; require a reviewed original
+        # outlet in the RSS metadata, not a bare unverified aggregator link.
+        if str(raw.get("source", "")).startswith("Google News"):
+            publisher_name = str(raw.get("publisher") or "").casefold().strip()
+            if publisher_name not in TRUSTED_GOOGLE_PUBLISHERS:
+                continue
         key = article_id(url)
         if key in blocked:
             continue
@@ -213,7 +245,10 @@ def render_report(
         for index, item in enumerate(displayed, 1):
             title = html.escape(clean(item["title"], 104), quote=False)
             category = html.escape(str(item["category"]), quote=False)
-            source = html.escape(clean(str(item["source"]), 65), quote=False)
+            label = str(item["source"])
+            if label.startswith("Google News"):
+                label += " / " + str(item.get("publisher", "unattributed")) + " (indexed)"
+            source = html.escape(clean(label, 85), quote=False)
             synopsis = html.escape(clean(story_summary(item), 130), quote=False)
             link = html.escape(item["url"], quote=True)
             lines.extend([
