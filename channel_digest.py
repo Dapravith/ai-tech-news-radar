@@ -199,6 +199,14 @@ def run(config: dict, state_path: Path, *, dry_run: bool,
         test_mode: bool, now: datetime) -> int:
     state = load_state(state_path)
     local_date = now.astimezone(TZ_KH).date().isoformat()
+    # Backup schedules are safe: once both channels are delivered, skip all
+    # feed requests and Telegram calls on later runs of the same local day.
+    if not dry_run and not test_mode and all(
+        state.get(key, {}).get(local_date, {}).get("delivered", False)
+        for key in config["channels"]
+    ):
+        logging.info("All channel digests already delivered on %s ICT", local_date)
+        return 0
     fetched, failed = {}, []
     for feed in config["feeds"]:
         try:
