@@ -3,7 +3,10 @@ name: Two Telegram Digests - 8 AM Cambodia
 on:
   schedule:
     # GitHub cron is UTC; Cambodia is UTC+7 year-round.
-    - cron: '0 1 * * *'
+    # First delivery near 08:00 ICT; second run recovers late/missed starts.
+    # channel_digest.py records per-channel delivery by Cambodia calendar day.
+    - cron: '11 1 * * *'
+    - cron: '41 1 * * *'
   workflow_dispatch:
     inputs:
       test_mode:

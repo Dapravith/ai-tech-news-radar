@@ -2,7 +2,10 @@
 name: AI Tech Radar - Every 3 Hours
 
 on:
-  # Legacy three-hour publisher is manual-only after two-channel migration.
+  schedule:
+    # 09:37, 12:37, 15:37, 18:37, 21:37, 00:37, 03:37, 06:37 ICT (UTC+7).
+    # Off the UTC hour to reduce (not eliminate) GitHub scheduler delays.
+    - cron: '37 2,5,8,11,14,17,20,23 * * *'
 
   push:
     branches: [main]
@@ -43,6 +46,27 @@ jobs:
           python-version: '3.12'
       - run: python -m unittest discover -s tests -v
 
+  rss-preview:
+    if: github.event_name == 'pull_request'
+    needs: [unit-tests]
+    name: Live RSS preview - no Telegram
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Collect real headlines without publishing
+        run: python news_radar.py --dry-run --test-mode
+      - name: Upload preview
+        uses: actions/upload-artifact@v6
+        with:
+          name: three-hour-tech-preview
+          path: out/latest.txt
+          if-no-files-found: error
+          retention-days: 3
+
   news:
     # Deploying code should not create extra public posts.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -56,7 +80,7 @@ jobs:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       # Public channel username; not a credential. Keep operational alerts private.
-      TELEGRAM_CHANNEL_ID: '@MyAITechRadar'
+      TELEGRAM_CHANNEL_ID: '@dailynewsagents'
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       TEST_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.test_mode && 'true' || 'false' }}
       PYTHONUNBUFFERED: "1"

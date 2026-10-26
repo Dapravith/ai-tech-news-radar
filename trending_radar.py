@@ -18,10 +18,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from news_radar import clean, fetch_feed, normalize_url, parse_datetime, report_timestamp, send_telegram
+from news_radar import TZ_KH, clean, fetch_feed, normalize_url, parse_datetime, report_timestamp, send_telegram
 
 ROOT = Path(__file__).resolve().parent
 STATE_FILE = ROOT / "state" / "trending_seen.json"
+LAST_REPORT_KEY = "__last_delivered_at__"
 TECH_STATE_FILE = ROOT / "state" / "seen.json"
 OUTPUT_FILE = ROOT / "out" / "trending_latest.txt"
 MAX_STORIES = 7
@@ -245,6 +246,15 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     now = utc_now()
     seen = load_state(STATE_FILE)
+    # A delayed scheduled backup must not send another briefing simply because
+    # it found different headlines later on the same Cambodia calendar day.
+    # Dry runs and explicit TEST runs remain available for verification.
+    if not args.test_mode and not args.dry_run:
+        last_report = parse_datetime(seen.get(LAST_REPORT_KEY, ""))
+        if (last_report is not None and
+                last_report.astimezone(TZ_KH).date() == now.astimezone(TZ_KH).date()):
+            logging.info("Daily trending already delivered on %s ICT", now.astimezone(TZ_KH).date())
+            return 0
     tech_seen = load_state(TECH_STATE_FILE)
     articles: list[dict] = []
     failed: list[str] = []
@@ -285,6 +295,7 @@ def main() -> int:
     if not args.test_mode:
         for item in sent_stories:
             seen[item["id"]] = now.isoformat()
+        seen[LAST_REPORT_KEY] = now.isoformat()
         cutoff = now - timedelta(days=90)
         seen = {k: v for k, v in seen.items() if (parse_datetime(v) or now) >= cutoff}
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)

@@ -117,7 +117,8 @@ class TrendingRadarTests(unittest.TestCase):
             self.assertEqual(send.call_args.args[2], "@MyAITechRadar")
             self.assertIn("Some news sources were unavailable", send.call_args.args[0])
             state = json.loads((Path(folder) / "trending.json").read_text())
-            self.assertEqual(set(state), {radar.article_id(a["url"])})
+            self.assertEqual(set(state), {radar.article_id(a["url"]), radar.LAST_REPORT_KEY})
+            self.assertEqual(state[radar.LAST_REPORT_KEY], NOW.isoformat())
 
     def test_second_run_does_not_duplicate_notification(self):
         a = article("World", number=3)
@@ -134,6 +135,25 @@ class TrendingRadarTests(unittest.TestCase):
             self.assertEqual(radar.main(), 0)
             self.assertEqual(radar.main(), 0)
             send.assert_called_once()
+
+    def test_late_backup_does_not_publish_new_story_twice_in_one_day(self):
+        first, newer = article("World", number=18), article("World", number=19)
+        with (tempfile.TemporaryDirectory() as folder,
+              patch.object(radar, "FEEDS", {"World": [("Working", "https://example.org/rss")]}),
+              patch.object(radar, "fetch_feed", side_effect=[[first], [newer]]) as fetch,
+              patch.object(radar, "STATE_FILE", Path(folder) / "trending.json"),
+              patch.object(radar, "TECH_STATE_FILE", Path(folder) / "tech.json"),
+              patch.object(radar, "OUTPUT_FILE", Path(folder) / "report.txt"),
+              patch.object(radar, "send_telegram") as send,
+              patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "fake", "TELEGRAM_CHANNEL_ID": "@dailynewsagents"}),
+              patch.object(sys, "argv", ["trending_radar.py"]),
+              patch.object(radar, "utc_now", return_value=NOW)):
+            self.assertEqual(radar.main(), 0)
+            self.assertEqual(radar.main(), 0)
+            send.assert_called_once()
+            self.assertEqual(fetch.call_count, 1)
+            delivered = radar.load_state(Path(folder) / "trending.json")
+            self.assertEqual(delivered[radar.LAST_REPORT_KEY], NOW.isoformat())
 
     def test_test_mode_uses_channel_but_does_not_update_state(self):
         with (tempfile.TemporaryDirectory() as folder,

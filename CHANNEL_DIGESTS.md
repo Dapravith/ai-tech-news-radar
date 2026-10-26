@@ -1,4 +1,4 @@
-# Two Telegram News Channels — 08:00 Cambodia
+# Two Telegram Technical Digests — Morning Cambodia Delivery
 
 This is the **replacement** for the uploaded inactive n8n *Crypto News & Sentiment* workflow. That JSON responds to inbound Telegram messages and contains no schedule. The replacement runs from GitHub Actions, with no n8n deployment, Hermes provider login, paid model, or always-on Mac required.
 
@@ -23,15 +23,15 @@ After the pull request is reviewed, merge it to `main`. It adds:
 - `state/channel_seen.json`
 - `tests/test_channel_digest.py`
 
-The schedule is `0 1 * * *` **UTC**, meaning approximately **08:00 Asia/Phnom_Penh (UTC+7)** daily. The two destinations are processed in the same run, so their actual delivery minutes can differ. GitHub Actions scheduling is **best effort**, not exact to the minute. GitHub-hosted runners operate even while your Mac is off.
+The primary schedule is `11 1 * * *` **UTC**, meaning approximately **08:11 Asia/Phnom_Penh (UTC+7)**, with a recovery attempt at `41 1 * * *` (08:41). Both channels use delivery-state markers keyed by the Cambodia date, so a second successful run avoids duplicate posts. GitHub Actions scheduling is **best effort**, not exact to the minute, and both starts can still be delayed. GitHub-hosted runners operate even while your Mac is off.
 
-The two older workflow schedules were removed on this branch. The legacy workflows remain available for manual runs, but will no longer publish automatically when this branch is merged.
+The separate three-hour technology radar and 09:09 all-topic trending briefing are restored on this branch and publish to [@dailynewsagents](https://t.me/dailynewsagents). They do **not** publish to these two technical digest channels. The daily trending briefing also has backup schedules and a per-ICT-date delivery marker.
 
 ## 2. Confirm Telegram credentials in GitHub, not just on your Mac
 
 Set repository Actions secret `TELEGRAM_BOT_TOKEN` to the token for **@HermesNewsRadarBot** (from BotFather). Do **not** paste that token into a repository file or a chat. The token on your local Mac is *not automatically available* to GitHub Actions.
 
-The bot must be an administrator with **Post Messages** permission in both public channels. You already verified direct posts to these channel usernames on your Mac; verify the GitHub secret belongs to the same bot.
+The bot must be an administrator with **Post Messages** permission in both public channels and in **@dailynewsagents** for the separately scheduled radar and trending reports. You already verified direct posts to these channel usernames on your Mac; verify the GitHub secret belongs to the same bot.
 
 Optional: repository Actions secret `TELEGRAM_CHAT_ID` should target a private admin chat to receive **failure-only** alerts. Do not use either public channel for operational alerts.
 
@@ -54,7 +54,7 @@ Your local Hermes jobs previously used:
 - `0d377c4c3f88` → @botsupportive
 - `acc2da83ad18` → @sedev2027
 
-Once the GitHub Actions replacement is working, **disable or remove their schedules** using `hermes cron --help` and the supported command for your installed Hermes version. Otherwise Hermes and GitHub may each post the same day's content. Do not delete them until the new scheduled workflow has been verified.
+Once GitHub Actions publishing is verified, **disable any overlapping Hermes schedules**, including any Hermes job posting to @dailynewsagents, using `hermes cron --help` and the supported command for your installed Hermes version. Otherwise Hermes and GitHub may each post the same day's content. Do not delete them until the new scheduled workflow has been verified.
 
 ## 5. Failure and duplicate handling
 

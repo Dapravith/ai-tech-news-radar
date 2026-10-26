@@ -1,59 +1,55 @@
-# AI Tech News Radar — Two Telegram Channels
+# AI Tech News Radar — Cloud-Scheduled Telegram Intelligence
 
-Cloud-hosted **8:00 AM Cambodia time** daily digests, separated by editorial category, delivered with [GitHub Actions](https://github.com/Dapravith/ai-tech-news-radar/actions). No VPS, locally running Hermes gateway, n8n server or paid model is required.
+An automated RSS-based news collector running on **GitHub Actions**, including a three-hour technology radar, a daily all-topic trending briefing and two independent technical digests. A VPS or continuously running laptop is **not** required for these Python workflows.
 
-| Channel | Destination | Focus |
-| --- | --- | --- |
-| IT Support Engineer 24/7 Daily Tips | [@botsupportive](https://t.me/botsupportive) | Security, network, server, cloud and support operations |
-| Software-Engineer work-life Daily Digest | [@sedev2027](https://t.me/sedev2027) | Full-stack coding, frontend/backend, data, developer tools and engineering reliability |
+> **Hermes note:** This repository uses Python scripts and GitHub Actions. It does not launch or host the Hermes Agent gateway. If Hermes is also publishing to these destinations, disable the overlapping Hermes cron jobs to avoid duplicate Telegram messages. Hosting a true 24/7 Hermes Agent requires a separate always-on runtime.
 
-**[Complete setup, testing, and troubleshooting instructions →](CHANNEL_DIGESTS.md)**
+## Production destinations and cadence
 
-## Current architecture
+All times below are **Cambodia ICT (UTC+7)**.
 
-```text
-GitHub Actions (daily 01:00 UTC = 08:00 Cambodia)
-  └─ channel_digest.py
-      ├─ fetch RSS feeds defined in config/channels.json
-      ├─ filter and rank IT Support articles
-      ├─ filter and rank Software Engineering articles
-      ├─ deduplicate per-channel, per-day
-      ├─ publish independently to @botsupportive and @sedev2027
-      └─ persist state/channel_seen.json
-```
+| Workflow | Planned cadence (ICT) | Telegram destination | Content |
+| --- | --- | --- | --- |
+| [AI Tech Radar](.github/workflows/daily-news.yml) | Every 3 hours, at 06:37, 09:37, 12:37, 15:37, 18:37, 21:37, 00:37, 03:37 | [@dailynewsagents](https://t.me/dailynewsagents) | AI, cloud, software, DevOps and security; up to 5 fresh stories |
+| [Daily Trending Intelligence](.github/workflows/daily-trending.yml) | 09:09, with backup attempts 09:49 and 10:29 | [@dailynewsagents](https://t.me/dailynewsagents) | World, Cambodia, technology, business, science, sports and culture; up to 7 stories |
+| [Two Telegram Digests](.github/workflows/channel-digests.yml) | 08:11, with backup attempt 08:41 | [@botsupportive](https://t.me/botsupportive) and [@sedev2027](https://t.me/sedev2027) | Two separately filtered, daily five-story technical digests |
 
-This replacement adapts the RSS aggregation idea from the supplied n8n crypto workflow. The supplied JSON is an **inactive Telegram-triggered crypto workflow**, not a daily scheduler, so it is not imported directly.
+The schedules are **best effort**. GitHub Actions may delay or occasionally skip cron jobs, even for public repositories; these are not precise or guaranteed execution times. Backup runs reduce the risk of missed daily delivery, but cannot guarantee exactly 08:00 or 09:00. Run history and real Telegram delivery should both be monitored.
 
-## Required configuration
+## Delivery and editorial safeguards
 
-- GitHub repository Actions secret `TELEGRAM_BOT_TOKEN` for `@HermesNewsRadarBot`, which must be an admin with **Post Messages** enabled in both channels.
-- GitHub Actions workflow permissions allow `contents: write` to commit deduplication state.
-- Optional Actions secret `TELEGRAM_CHAT_ID` for **private** failure-only notifications.
+- News comes from publicly available RSS/Atom feeds, not paid API subscriptions.
+- Freshness, relevance, source reliability and topic diversity influence editorial ranking. **Trending** describes an editorial ranking proxy, **not measured social-media virality**.
+- Production stories include the original link and source timestamp in ICT. Feed summaries are not independent fact checking.
+- Technical and all-topic feeds check each other's delivered-article IDs where applicable to limit repeated stories on @dailynewsagents.
+- On successful Telegram API acknowledgement, delivered IDs are written to `state/seen.json`, `state/trending_seen.json` or `state/channel_seen.json`, then committed to `main`.
+- Daily trending backup runs use an ICT-calendar-day delivery marker. The two technical digest backups use their existing per-channel date markers. Production reruns skip completed daily posts.
+- A source failure does not necessarily block all other sources. When all sources fail, publication fails instead of inventing headlines. Workflow failures alert a private chat when configured.
+- Telegram publication and Git state commits are **not atomic**: if the state commit fails after a successful message, replay may duplicate a post. Inspect logs before replaying a production run.
 
-## Schedule, previews and tests
+## Required setup
 
-The active publishing workflow is `.github/workflows/channel-digests.yml`, triggered by `0 1 * * *` UTC. GitHub scheduled starts can be delayed and are not guaranteed to run at exactly 08:00.
+1. Add the GitHub Actions repository secret `TELEGRAM_BOT_TOKEN` for `@HermesNewsRadarBot`. The bot must be an administrator with **Post Messages** permission in `@dailynewsagents`, `@botsupportive` and `@sedev2027`.
+2. Optionally add `TELEGRAM_CHAT_ID` as a **private admin chat** for failed workflow alerts; never put secrets in committed files.
+3. Permit **contents: write** in GitHub Actions for the publisher jobs to save delivery state on `main`. Confirm branch protection allows bot state commits, or use another persistent state store.
+4. Review whether any local Hermes cron job also posts to those same channels. Keep one publisher per channel/cadence.
+5. Merge the reviewed branch to `main`. Scheduled runs execute only from the default branch. Before merge, PR workflows run unit tests and RSS preview checks, **not** production Telegram delivery.
 
-Open **Actions → Two Telegram Digests - 8 AM Cambodia → Run workflow**. For a nonposting preview use `test_mode=true` and `dry_run=true`; then send labelled test messages using `test_mode=true`, `dry_run=false`. Both are separate from production delivery state.
+## Verify safely
 
-Run offline unit tests:
+Run locally (no Telegram delivery):
 
 ```bash
 python3 -m unittest discover -s tests -v
-```
-
-Local network-backed preview:
-
-```bash
+python3 news_radar.py --dry-run --test-mode
+python3 trending_radar.py --dry-run --test-mode
 python3 channel_digest.py --dry-run --test-mode
 ```
 
-The older `daily-news.yml` and `daily-trending.yml` schedules are retired but those workflows and scripts remain for manual use. Turn off **local Hermes cron jobs** posting to these same channels after verifying GitHub delivery, or duplicate digests can occur. Per-channel delivery is best effort; Telegram and git commits are not atomic.
+Or open [GitHub Actions](https://github.com/Dapravith/ai-tech-news-radar/actions) and run the relevant workflow with `test_mode=true`. For the two-channel publisher choose `dry_run=true` as well to avoid test posts. The three-hour and trending scripts accept `--dry-run` locally; their workflow-dispatch tests send clearly labelled TEST posts.
 
-## Legacy tools
+Check the successful **publish job**, log line confirming Telegram acceptance, and updated delivery state. A green test job or a green workflow with no qualifying headlines is not proof that a new message reached Telegram.
 
-- `news_radar.py`: three-hour AI/tech radar collector and shared RSS/Telegram helpers (manual mode)
-- `trending_radar.py`: broad trending brief collector (manual mode)
-- `tests/`: offline tests for the new and legacy systems
+The GitHub cloud schedule does not require Hermes or your Mac to stay online, but it cannot provide second-level scheduling guarantees. For strict timing or an independently operating Hermes reasoning agent, use a hosted scheduler/worker or always-on Hermes deployment and configure a single authoritative Telegram publisher.
 
-See [CHANNEL_DIGESTS.md](CHANNEL_DIGESTS.md) for editorial category configuration and operational details.
+For channel filters and operational details, see [CHANNEL_DIGESTS.md](CHANNEL_DIGESTS.md).
