@@ -11,6 +11,7 @@ All times below are **Cambodia ICT (UTC+7)**.
 | Workflow | Planned cadence (ICT) | Telegram destination | Content |
 | --- | --- | --- | --- |
 | [AI Tech Radar](.github/workflows/daily-news.yml) | Every 3 hours, at 06:37, 09:37, 12:37, 15:37, 18:37, 21:37, 00:37, 03:37, plus a recovery scan 40 minutes later | [@dailynewsagents](https://t.me/dailynewsagents) | AI, cloud, software, DevOps and security; up to 5 fresh stories |
+| [Cambodia Morning & Evening Brief](.github/workflows/cambodia-brief.yml) | **07:23 AM and 06:13 PM**, with recovery runs at 07:53 and 18:43 | [@dailynewsagents](https://t.me/dailynewsagents) and optional private chat | Up to 6 curated Cambodia headlines from approved publishers, including Khmer-language news when indexed |
 | [Daily Trending Intelligence](.github/workflows/daily-trending.yml) | 09:09, with backup attempts 09:49 and 10:29 | [@dailynewsagents](https://t.me/dailynewsagents) | World, Cambodia, technology, business, science, sports and culture; up to 7 stories |
 | [Two Telegram Digests](.github/workflows/channel-digests.yml) | 08:11, with backup attempt 08:41 | [@botsupportive](https://t.me/botsupportive) and [@sedev2027](https://t.me/sedev2027) | Two separately filtered, daily five-story technical digests |
 
@@ -26,6 +27,22 @@ The schedules are **best effort**. GitHub Actions may delay or occasionally skip
 - Source curation does **not** verify each article's claims, and vendor posts are primary statements about their own products. Each report retains the original or aggregator URL, timestamp and outlet attribution.
 - The three-hour technology radar limits production articles to the previous **24 hours** and normally uses no more than two stories per publisher when enough alternatives exist. The additional 40-minute scan also catches late-arriving stories and recovers from a missed initial scan.
 - A published story must be dated within the production freshness window. An unavailable feed cannot produce invented or stale stories. Dry-run PR checks exercise real RSS retrieval.
+
+## Cambodia news without scrolling Facebook
+
+The dedicated `cambodia_brief.py` publisher collects recent **Cambodia news**, including Khmer and English headlines, and sends a compact Telegram report twice a day. It does **not** scrape, log in to, or impersonate Facebook pages; it follows the original publishers' website coverage indexed by Google News. The reports offer the feel of a short newsfeed: headline, topic, publisher, Cambodia publication time and a link.
+
+**Reviewed publisher list** includes Cambodianess, CamboJA News, Phnom Penh Post, Khmer Times, Kiripost, Khmer language publishers Kampuchea Thmey and Koh Santepheap, plus Reuters, AP, BBC, RFI, VOA Khmer and official Cambodian news agency AKP. Coverage depends on current index availability. Official/state-agency reporting is labeled as such, not presented as independent verification.
+
+**Get the briefing directly in your private Telegram:**
+
+1. Open the chat with [@HermesNewsRadarBot](https://t.me/HermesNewsRadarBot) and send `/start` so Telegram permits the bot to message you.
+2. In repository **Settings → Secrets and variables → Actions**, set `TELEGRAM_NEWS_CHAT_ID` to your **private** Telegram chat ID (not a channel username). Do not commit or paste credentials into source files.
+3. If that secret is absent, the workflow falls back to `TELEGRAM_CHAT_ID` when configured. That existing secret was previously for private operational alerts; set the dedicated secret if you want a different recipient.
+4. The bot must have **Post Messages** permission in [@dailynewsagents](https://t.me/dailynewsagents); otherwise the public channel delivery fails. The private DM is optional, and successful delivery is recorded separately from public delivery.
+5. Run [Cambodia News Brief Actions](https://github.com/Dapravith/ai-tech-news-radar/actions/workflows/cambodia-brief.yml) with `test_mode=true`, `dry_run=true` for a **no-send preview**. After reviewing, run a labeled Telegram test (`test_mode=true`, `dry_run=false`). Then observe a real scheduled run.
+
+Daily runs use Cambodia ICT and have recovery attempts, but **GitHub Actions cron is best-effort**: they are not guaranteed to begin exactly on schedule. A source outage is never filled with invented headlines. Repeated per-slot runs do not resend confirmed destinations. Green CI preview does not prove that Telegram accepted a production message.
 
 ## Delivery and editorial safeguards
 
