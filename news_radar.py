@@ -30,7 +30,10 @@ FEEDS = {
     'Google AI Blog': 'https://blog.google/innovation-and-ai/technology/ai/rss/',
     'Hugging Face': 'https://huggingface.co/blog/feed.xml',
     'GitHub Blog': 'https://github.blog/feed/',
-    'Hacker News': 'https://hnrss.org/frontpage',
+    # Community discussion is not independently verified reporting; exclude
+    # Hacker News from production news publication.
+    'CISA Alerts': 'https://www.cisa.gov/cybersecurity-advisories/alerts.xml',
+    'Spring Blog': 'https://spring.io/blog.atom',
     'Cloudflare Blog': 'https://blog.cloudflare.com/rss/',
     'Kubernetes Blog': 'https://kubernetes.io/feed.xml',
     'Python Blog': 'https://blog.python.org/rss.xml',
@@ -123,8 +126,15 @@ def parse_feed(raw: bytes, source: str) -> list[dict]:
         url = normalize_url(get_link(node))
         pub = parse_datetime(child_text(node, {'pubdate', 'published', 'updated', 'date'}))
         summary = clean(child_text(node, {'description', 'summary', 'content'}), 300)
+        # Google News is an index, not an original publisher. RSS <source>
+        # identifies the outlet that reported a headline; never attribute
+        # its claims to Google News itself.
+        publisher = clean(child_text(node, {'source'}), 100) if source.startswith('Google News') else ''
         if title and url and pub:
-            items.append({'title': title, 'url': url, 'published': pub, 'source': source, 'summary': summary})
+            item = {'title': title, 'url': url, 'published': pub, 'source': source, 'summary': summary}
+            if publisher:
+                item['publisher'] = publisher
+            items.append(item)
     return items
 
 
@@ -146,8 +156,10 @@ def score(item: dict, now: datetime) -> float:
             points += weight * 2
         elif re.search(pattern, description):
             points += weight * 0.5
-    if item['source'] in ('OpenAI News', 'Google AI Blog', 'Hugging Face', 'GitHub Blog', 'Kubernetes Blog', 'Cloudflare Blog', 'Python Blog'):
-        points += 2
+    if item['source'] in ('OpenAI News', 'Google AI Blog', 'Hugging Face', 'GitHub Blog', 'Kubernetes Blog', 'Cloudflare Blog', 'Python Blog', 'Spring Blog', 'CISA Alerts'):
+        # Primary vendor/maintainer and public agency announcements are the
+        # authoritative source for their own changes; not independent validation.
+        points += 3
     hours = max((now - item['published']).total_seconds() / 3600, 0)
     return points + max(0, 24 - hours) / 15
 
