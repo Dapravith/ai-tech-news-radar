@@ -50,6 +50,31 @@ class NewsRadarTest(unittest.TestCase):
         self.assertEqual(select_items([item], {selected[0]['id']: now.isoformat()}, now, False), [])
         self.assertGreater(score(item, now), 0)
 
+    def test_recent_fresh_news_only_and_source_diversity(self):
+        now = datetime(2026, 10, 26, 3, tzinfo=timezone.utc)
+        articles = [
+            {'title': f'Cloud security release version {i}',
+             'url': f'https://example.com/openai/{i}',
+             'source': 'OpenAI News', 'summary': 'AI agent security updates',
+             'published': now - timedelta(hours=1)}
+            for i in range(4)
+        ]
+        articles.extend([
+            {'title': f'Important infrastructure security patch {i}',
+             'url': f'https://example.com/security/{i}',
+             'source': 'UK NCSC News', 'summary': 'Cybersecurity patch report',
+             'published': now - timedelta(hours=2)}
+            for i in range(3)
+        ])
+        with patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}):
+            selected = select_items(articles, {}, now, False)
+        self.assertEqual(len(selected), 5)
+        self.assertGreaterEqual(sum(x['source'] == 'UK NCSC News' for x in selected), 2)
+        old = dict(articles[0], title='Old critical security fix',
+                   url='https://example.com/old',
+                   published=now - timedelta(hours=30))
+        self.assertEqual(select_items([old], {}, now, False), [])
+
     def test_message_links_and_flag(self):
         now = datetime(2026, 10, 13, 5, tzinfo=timezone.utc)
         item = parse_feed(ATOM, 'AI')[0]
