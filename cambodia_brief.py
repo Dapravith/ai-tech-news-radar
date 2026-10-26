@@ -48,7 +48,7 @@ PUBLISHERS = {
     "koh santepheap": "Koh Santepheap",
     "kampuchea thmey": "Kampuchea Thmey",
 }
-LOCALE_EN = "&hl=en-US&gl=KH&ceid=KH:en"
+LOCALE_EN = "&hl=en-US&gl=US&ceid=US:en"
 LOCALE_KM = "&hl=km&gl=KH&ceid=KH:km"
 BASE = "https://news.google.com/rss/search?q="
 FEEDS = {
@@ -203,6 +203,10 @@ def run(now: datetime, state_path: Path, *, dry_run: bool, test_mode: bool,
         except Exception as error:
             failures.append(name)
             logging.warning("%s unavailable: %s", name, type(error).__name__)
+    if dry_run:
+        from collections import Counter
+        counts = Counter(clean(str(a.get("publisher", "")), 100) or "(missing)" for a in articles)
+        logging.info("RSS publisher sample: %s", counts.most_common(12))
     if len(failures) == len(FEEDS):
         logging.error("All Cambodia news indexes unavailable, refusing stale digest")
         return 1
