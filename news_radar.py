@@ -32,7 +32,7 @@ FEEDS = {
     'GitHub Blog': 'https://github.blog/feed/',
     # Community discussion is not independently verified reporting; exclude
     # Hacker News from production news publication.
-    'CISA Alerts': 'https://www.cisa.gov/cybersecurity-advisories/alerts.xml',
+    'UK NCSC News': 'https://www.ncsc.gov.uk/api/1/services/v1/news-rss-feed.xml',
     'Spring Blog': 'https://spring.io/blog.atom',
     'Cloudflare Blog': 'https://blog.cloudflare.com/rss/',
     'Kubernetes Blog': 'https://kubernetes.io/feed.xml',
@@ -156,7 +156,7 @@ def score(item: dict, now: datetime) -> float:
             points += weight * 2
         elif re.search(pattern, description):
             points += weight * 0.5
-    if item['source'] in ('OpenAI News', 'Google AI Blog', 'Hugging Face', 'GitHub Blog', 'Kubernetes Blog', 'Cloudflare Blog', 'Python Blog', 'Spring Blog', 'CISA Alerts'):
+    if item['source'] in ('OpenAI News', 'Google AI Blog', 'Hugging Face', 'GitHub Blog', 'Kubernetes Blog', 'Cloudflare Blog', 'Python Blog', 'Spring Blog', 'UK NCSC News'):
         # Primary vendor/maintainer and public agency announcements are the
         # authoritative source for their own changes; not independent validation.
         points += 3
