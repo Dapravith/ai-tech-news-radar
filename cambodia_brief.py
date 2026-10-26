@@ -52,9 +52,9 @@ LOCALE_EN = "&hl=en-US&gl=US&ceid=US:en"
 LOCALE_KM = "&hl=km&gl=KH&ceid=KH:km"
 BASE = "https://news.google.com/rss/search?q="
 FEEDS = {
-    "Cambodia English Index": BASE + quote_plus("Cambodia when:1d") + LOCALE_EN,
-    "Cambodia Khmer Index": BASE + quote_plus("កម្ពុជា when:1d") + LOCALE_KM,
-    "Cambodia Business Index": BASE + quote_plus("Cambodia business economy when:1d") + LOCALE_EN,
+    "Google News Cambodia English": BASE + quote_plus("Cambodia when:1d") + LOCALE_EN,
+    "Google News Cambodia Khmer": BASE + quote_plus("កម្ពុជា when:1d") + LOCALE_KM,
+    "Google News Cambodia Business": BASE + quote_plus("Cambodia business economy when:1d") + LOCALE_EN,
 }
 TOPICS = {
     "💼 Economy & Business": ("economy", "business", "investment", "trade", "bank", "tourism", "startup",
