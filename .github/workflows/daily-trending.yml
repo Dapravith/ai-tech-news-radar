@@ -4,6 +4,9 @@ on:
   schedule:
     # 09:09 Cambodia time (02:09 UTC). GitHub may delay scheduled starts.
     - cron: '9 2 * * *'
+    # Safe recovery attempts: daily briefing records its delivered Cambodia date.
+    - cron: '49 2 * * *'
+    - cron: '29 3 * * *'
   workflow_dispatch:
     inputs:
       test_mode:
