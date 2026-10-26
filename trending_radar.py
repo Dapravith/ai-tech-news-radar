@@ -46,7 +46,6 @@ FEEDS: dict[str, list[tuple[str, str]]] = {
         ("Google News World", GOOGLE_TOPIC + "WORLD" + US_LOCALE),
     ],
     "Cambodia": [
-        ("Khmer Times", "https://www.khmertimeskh.com/feed/"),
         ("Google News Cambodia", CAMBODIA_SEARCH),
     ],
     "Technology": [
@@ -61,7 +60,7 @@ FEEDS: dict[str, list[tuple[str, str]]] = {
     ],
     "Science": [
         ("BBC Science", "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"),
-        ("Nature", "https://www.nature.com/nature.rss"),
+        ("The Guardian Science", "https://www.theguardian.com/science/rss"),
         ("Google News Science", GOOGLE_TOPIC + "SCIENCE" + US_LOCALE),
     ],
     "Sports": [
@@ -92,7 +91,7 @@ PREFERRED_DIRECT_SOURCES = frozenset({
     'BBC World', 'BBC Technology', 'BBC Business', 'BBC Science',
     'BBC Sport', 'BBC Culture', 'The Guardian World',
     'The Guardian Business', 'The Guardian Culture',
-    'Deutsche Welle World', 'Nature', 'Khmer Times', 'GitHub Blog',
+    'Deutsche Welle World', 'The Guardian Science', 'GitHub Blog',
 })
 
 SIGNIFICANCE_TERMS = (
