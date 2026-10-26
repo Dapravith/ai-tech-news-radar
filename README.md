@@ -16,6 +16,16 @@ All times below are **Cambodia ICT (UTC+7)**.
 
 The schedules are **best effort**. GitHub Actions may delay or occasionally skip cron jobs, even for public repositories; these are not precise or guaranteed execution times. Backup runs reduce the risk of missed daily delivery, but cannot guarantee exactly 08:00 or 09:00. Run history and real Telegram delivery should both be monitored.
 
+## Trusted sources and news quality
+
+- **World / business / culture:** BBC News, The Guardian and Deutsche Welle (direct publisher feeds).
+- **Cambodia:** Khmer Times direct feed plus Google News indexing restricted to a reviewed publisher allowlist (for example Cambodianess, CamboJA News, Phnom Penh Post, Khmer Times, Reuters and AP). If a direct publisher feed fails, the digest can still use other available sources; its status is visible in the workflow logs.
+- **Science:** BBC Science and Nature (Nature is the publisher of original scientific research, not necessarily an independent verification of every claim).
+- **Technology / security:** GitHub, Kubernetes, Cloudflare, Python, Google AI, OpenAI, Hugging Face, Spring and official CISA alerts.
+- Hacker News community-ranked posts are excluded from automated production publication because a popular link is not confirmation of accuracy. Google News is treated as an *index*, never as the original reporter; unknown or missing Google publisher metadata is filtered out.
+- Source curation does **not** verify each article's claims, and vendor posts are primary statements about their own products. Each report retains the original or aggregator URL, timestamp and outlet attribution.
+- A published story must be dated within the production freshness window. An unavailable feed cannot produce invented or stale stories. Dry-run PR checks exercise real RSS retrieval.
+
 ## Delivery and editorial safeguards
 
 - News comes from publicly available RSS/Atom feeds, not paid API subscriptions.
