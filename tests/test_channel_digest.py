@@ -125,6 +125,19 @@ class DeliveryTests(unittest.TestCase):
                                         test_mode=False, now=NOW), 0)
             self.assertEqual(len(calls), 2)
 
+    def test_backup_schedule_skips_fetch_when_both_channels_delivered(self):
+        today = NOW.astimezone(digest.TZ_KH).date().isoformat()
+        digest.write_state({
+            "it_support": {today: {"ids": ["one"], "delivered": True}},
+            "software": {today: {"ids": ["two"], "delivered": True}},
+        }, self.path)
+        with (patch.object(digest, "fetch_feed") as fetch,
+              patch.object(digest, "send_telegram") as send):
+            self.assertEqual(digest.run(self.config, self.path, dry_run=False,
+                                        test_mode=False, now=NOW), 0)
+            fetch.assert_not_called()
+            send.assert_not_called()
+
     def test_partial_failure_preserves_first_success(self):
         called = []
         def send(_msg, _token, chat):
