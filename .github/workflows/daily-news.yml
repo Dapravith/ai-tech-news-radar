@@ -6,6 +6,9 @@ on:
     # 09:37, 12:37, 15:37, 18:37, 21:37, 00:37, 03:37, 06:37 ICT (UTC+7).
     # Off the UTC hour to reduce (not eliminate) GitHub scheduler delays.
     - cron: '37 2,5,8,11,14,17,20,23 * * *'
+    # Recovery scan 40 minutes later. Seen-ID state suppresses repeat stories;
+    # this also catches articles that appeared after the first scan.
+    - cron: '17 0,3,6,9,12,15,18,21 * * *'
 
   push:
     branches: [main]
