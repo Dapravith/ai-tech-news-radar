@@ -10,7 +10,7 @@ All times below are **Cambodia ICT (UTC+7)**.
 
 | Workflow | Planned cadence (ICT) | Telegram destination | Content |
 | --- | --- | --- | --- |
-| [AI Tech Radar](.github/workflows/daily-news.yml) | Every 3 hours, at 06:37, 09:37, 12:37, 15:37, 18:37, 21:37, 00:37, 03:37 | [@dailynewsagents](https://t.me/dailynewsagents) | AI, cloud, software, DevOps and security; up to 5 fresh stories |
+| [AI Tech Radar](.github/workflows/daily-news.yml) | Every 3 hours, at 06:37, 09:37, 12:37, 15:37, 18:37, 21:37, 00:37, 03:37, plus a recovery scan 40 minutes later | [@dailynewsagents](https://t.me/dailynewsagents) | AI, cloud, software, DevOps and security; up to 5 fresh stories |
 | [Daily Trending Intelligence](.github/workflows/daily-trending.yml) | 09:09, with backup attempts 09:49 and 10:29 | [@dailynewsagents](https://t.me/dailynewsagents) | World, Cambodia, technology, business, science, sports and culture; up to 7 stories |
 | [Two Telegram Digests](.github/workflows/channel-digests.yml) | 08:11, with backup attempt 08:41 | [@botsupportive](https://t.me/botsupportive) and [@sedev2027](https://t.me/sedev2027) | Two separately filtered, daily five-story technical digests |
 
@@ -24,6 +24,7 @@ The schedules are **best effort**. GitHub Actions may delay or occasionally skip
 - **Technology / security:** GitHub, Kubernetes, Cloudflare, Python, Google AI, OpenAI, Hugging Face, Spring, and the UK's National Cyber Security Centre (NCSC) official news feed. CISA's official RSS endpoint returned HTTP 403 from the cloud runner and is not an active source.
 - Hacker News community-ranked posts are excluded from automated production publication because a popular link is not confirmation of accuracy. Google News is treated as an *index*, never as the original reporter; unknown or missing Google publisher metadata is filtered out.
 - Source curation does **not** verify each article's claims, and vendor posts are primary statements about their own products. Each report retains the original or aggregator URL, timestamp and outlet attribution.
+- The three-hour technology radar limits production articles to the previous **24 hours** and normally uses no more than two stories per publisher when enough alternatives exist. The additional 40-minute scan also catches late-arriving stories and recovers from a missed initial scan.
 - A published story must be dated within the production freshness window. An unavailable feed cannot produce invented or stale stories. Dry-run PR checks exercise real RSS retrieval.
 
 ## Delivery and editorial safeguards
