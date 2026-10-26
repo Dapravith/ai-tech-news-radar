@@ -34,7 +34,7 @@ class NewsRadarTest(unittest.TestCase):
         self.assertEqual(selected[0]["source"], "Google News Cambodia")
 
     def test_high_trust_feed_registration(self):
-        self.assertIn("CISA Alerts", news_radar.FEEDS)
+        self.assertIn("UK NCSC News", news_radar.FEEDS)
         self.assertIn("Spring Blog", news_radar.FEEDS)
         self.assertNotIn("Hacker News", news_radar.FEEDS)
 
