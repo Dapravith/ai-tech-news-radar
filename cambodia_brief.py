@@ -140,7 +140,7 @@ def select(articles: list[dict], seen: dict, now: datetime, *, limit: int = MAX_
 def render(items: list[dict], now: datetime, *, period: str, partial: bool, test_mode: bool) -> str:
     heading = "☀️ MORNING" if period == "morning" else "🌆 EVENING"
     intro = [
-        f"🇰🇭 <b>CAMBODIA NEWS · {heading}</b>",
+        f"🇰🇭 <b>CAMBODIA NEWS · ព័ត៌មានកម្ពុជា · {heading}</b>",
         f"🕒 <b>Report:</b> {html.escape(report_timestamp(now))}",
         f"📰 <b>{len(items)} curated headlines</b> · No endless scrolling",
     ]
