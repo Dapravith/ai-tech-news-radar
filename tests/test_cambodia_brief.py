@@ -9,6 +9,7 @@ from unittest.mock import patch
 import cambodia_brief as brief
 
 AM = datetime(2026, 10, 26, 0, 23, tzinfo=timezone.utc)
+NOON = datetime(2026, 10, 26, 5, 23, tzinfo=timezone.utc)
 PM = datetime(2026, 10, 26, 11, 13, tzinfo=timezone.utc)
 
 
@@ -22,9 +23,61 @@ def item(title="Cambodia digital economy update", publisher="Cambodianess", hour
 
 
 class SelectionTests(unittest.TestCase):
-    def test_cambodia_ict_morning_and_evening_slots(self):
+    def test_cambodia_ict_daypart_boundaries(self):
         self.assertEqual(brief.slot_for_time(AM), "2026-10-26:morning")
+        self.assertEqual(brief.slot_for_time(NOON), "2026-10-26:afternoon")
         self.assertEqual(brief.slot_for_time(PM), "2026-10-26:evening")
+        cases = [
+            (4, 59, "overnight"), (5, 0, "morning"),
+            (11, 59, "morning"), (12, 0, "afternoon"),
+            (17, 59, "afternoon"), (18, 0, "evening"),
+            (23, 59, "evening"), (0, 0, "overnight"),
+        ]
+        for hour, minute, expected in cases:
+            # Local Cambodia time expressed with a +07:00 offset.
+            moment = datetime(2026, 10, 27, hour, minute,
+                              tzinfo=brief.TZ_KH)
+            with self.subTest(local_time=(hour, minute)):
+                self.assertEqual(brief.slot_for_time(moment),
+                                 f"2026-10-27:{expected}")
+
+    def test_delayed_morning_run_at_1216_is_afternoon_and_transparent(self):
+        delayed = datetime(2026, 10, 27, 5, 16, 15, tzinfo=timezone.utc)
+        self.assertEqual(brief.slot_for_time(delayed), "2026-10-27:afternoon")
+        notice = brief.scheduled_delay_notice(delayed, "23 0 * * *")
+        self.assertIn("07:23", notice)
+        self.assertIn("12:16", notice)
+        self.assertIn("4h 53m late", notice)
+        report = brief.render([], delayed, period="afternoon", partial=False,
+                              test_mode=False, delayed_notice=notice)
+        self.assertIn("AFTERNOON", report)
+        self.assertNotIn("🌆 EVENING", report)
+        self.assertIn("Delayed GitHub schedule", report)
+        self.assertIsNone(brief.scheduled_delay_notice(
+            datetime(2026, 10, 27, 0, 30, tzinfo=timezone.utc),
+            "23 0 * * *"
+        ))
+
+    def test_legacy_wrong_evening_and_morning_state_is_reclassified(self):
+        # Actual records retrieved 27 Oct: a 00:20 ICT run was stored as
+        # "morning", and a 12:16 ICT run was stored as "evening".
+        old = {"seen": {
+            "before": "2026-10-26T17:20:45+00:00",
+            "lunch": "2026-10-27T05:16:15+00:00",
+        }, "slots": {
+            "2026-10-27:morning": {
+                "ids": ["before"], "sent": {"channel": True}},
+            "2026-10-27:evening": {
+                "ids": ["lunch"], "sent": {"personal": True}},
+        }}
+        fixed = brief.normalize_state_slots(old)
+        self.assertEqual(set(fixed["slots"]),
+                         {"2026-10-27:overnight", "2026-10-27:afternoon"})
+        self.assertTrue(fixed["slots"]["2026-10-27:afternoon"]["sent"]["personal"])
+        self.assertNotIn("2026-10-27:evening", fixed["slots"])
+
+    def test_afternoon_and_evening_retry_have_distinct_delivery_slots(self):
+        self.assertNotEqual(brief.slot_for_time(NOON), brief.slot_for_time(PM))
 
     def test_reject_unknown_missing_and_old_publishers(self):
         unknown = item(index=2, publisher="Random Viral Content")

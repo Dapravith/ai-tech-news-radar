@@ -11,7 +11,7 @@ All times below are **Cambodia ICT (UTC+7)**.
 | Workflow | Planned cadence (ICT) | Telegram destination | Content |
 | --- | --- | --- | --- |
 | [AI Tech Radar](.github/workflows/daily-news.yml) | Every 3 hours, at 06:37, 09:37, 12:37, 15:37, 18:37, 21:37, 00:37, 03:37, plus a recovery scan 40 minutes later | [@dailynewsagents](https://t.me/dailynewsagents) | AI, cloud, software, DevOps and security; up to 5 fresh stories |
-| [Cambodia Morning & Evening Brief](.github/workflows/cambodia-brief.yml) | **07:23 AM and 06:13 PM**, with recovery runs at 07:53 and 18:43 | [@dailynewsagents](https://t.me/dailynewsagents) and optional private chat | Up to 6 curated Cambodia headlines from approved publishers, including Khmer-language news when indexed |
+| [Cambodia Morning / Afternoon / Evening Brief](.github/workflows/cambodia-brief.yml) | **07:23 AM, 12:23 PM and 06:13 PM**, with recovery runs at 07:53, 12:53 and 18:43 | [@dailynewsagents](https://t.me/dailynewsagents) and optional private chat | Up to 6 curated Cambodia headlines from approved publishers, including Khmer-language news when indexed |
 | [Daily Trending Intelligence](.github/workflows/daily-trending.yml) | 09:09, with backup attempts 09:49 and 10:29 | [@dailynewsagents](https://t.me/dailynewsagents) | World, Cambodia, technology, business, science, sports and culture; up to 7 stories |
 | [Two Telegram Digests](.github/workflows/channel-digests.yml) | 08:11, with backup attempt 08:41 | [@botsupportive](https://t.me/botsupportive) and [@sedev2027](https://t.me/sedev2027) | Two separately filtered, daily five-story technical digests |
 
@@ -30,7 +30,7 @@ The schedules are **best effort**. GitHub Actions may delay or occasionally skip
 
 ## Cambodia news without scrolling Facebook
 
-The dedicated `cambodia_brief.py` publisher collects recent **Cambodia news**, including Khmer and English headlines, and sends a compact Telegram report twice a day. It does **not** scrape, log in to, or impersonate Facebook pages; it follows the original publishers' website coverage indexed by Google News. The reports offer the feel of a short newsfeed: headline, topic, publisher, Cambodia publication time and a link.
+The dedicated `cambodia_brief.py` publisher collects recent **Cambodia news**, including Khmer and English headlines, and sends compact Telegram reports three times a day. It does **not** scrape, log in to, or impersonate Facebook pages; it follows the original publishers' website coverage indexed by Google News. The reports offer the feel of a short newsfeed: headline, topic, publisher, Cambodia publication time and a link.
 
 **Reviewed publisher list** includes Cambodianess, CamboJA News, Phnom Penh Post, Khmer Times, Kiripost, Khmer language publishers Kampuchea Thmey and Koh Santepheap, plus Reuters, AP, BBC, RFI, VOA Khmer and official Cambodian news agency AKP. Coverage depends on current index availability. Official/state-agency reporting is labeled as such, not presented as independent verification.
 
@@ -41,6 +41,10 @@ The dedicated `cambodia_brief.py` publisher collects recent **Cambodia news**, i
 3. If that secret is absent, the workflow falls back to `TELEGRAM_CHAT_ID` when configured. That existing secret was previously for private operational alerts; set the dedicated secret if you want a different recipient.
 4. The bot must have **Post Messages** permission in [@dailynewsagents](https://t.me/dailynewsagents); otherwise the public channel delivery fails. The private DM is optional, and successful delivery is recorded separately from public delivery.
 5. Run [Cambodia News Brief Actions](https://github.com/Dapravith/ai-tech-news-radar/actions/workflows/cambodia-brief.yml) with `test_mode=true`, `dry_run=true` for a **no-send preview**. After reviewing, run a labeled Telegram test (`test_mode=true`, `dry_run=false`). Then observe a real scheduled run.
+
+The publisher classifies notifications by the **actual** Cambodia clock time: Morning (05:00–11:59), Afternoon (12:00–17:59), Evening (18:00–23:59), or Overnight (00:00–04:59). This defines **news reporting periods**, not Cambodia labor-law shift entitlements. The deployment corrects earlier misclassified saved delivery slots using their recorded send timestamps. When a scheduled job starts over 30 minutes late, the report displays the original planned start and the execution delay instead of claiming on-time delivery.
+
+On October 27, 2026, GitHub started the 07:23/07:53 ICT morning jobs around 12:16/12:40 ICT: a multi-hour scheduling delay, separate from the period-classification bug. **No GitHub cron configuration can guarantee exact minutes**. For a real delivery-time SLA, use a managed external scheduler/always-on worker with monitoring and an explicit late-run policy.
 
 Daily runs use Cambodia ICT and have recovery attempts, but **GitHub Actions cron is best-effort**: they are not guaranteed to begin exactly on schedule. A source outage is never filled with invented headlines. Repeated per-slot runs do not resend confirmed destinations. Green CI preview does not prove that Telegram accepted a production message.
 
