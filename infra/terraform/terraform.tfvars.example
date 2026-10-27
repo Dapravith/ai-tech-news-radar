@@ -1,0 +1,4 @@
+# Copy to terraform.tfvars locally; never commit actual connection details.
+kube_context    = "YOUR_K3S_CLUSTER_CONTEXT"
+kubeconfig_path = "~/.kube/config"
+namespace       = "news-radar-shadow"

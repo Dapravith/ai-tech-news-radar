@@ -3,3 +3,12 @@ __pycache__/
 .env
 out/
 .DS_Store
+
+# Terraform state, plans and provider cache (never commit)
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/terraform.tfvars
+**/*.auto.tfvars
+**/.terraform.lock.hcl.bak

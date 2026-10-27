@@ -1,0 +1,73 @@
+{{- /* Deliberately shadow-only: never allow mutable chart overrides to remove dry-run flags. */ -}}
+{{- if ne .Values.shadow.namespace "news-radar-shadow" -}}
+{{- fail "Only news-radar-shadow namespace is allowed in phase 1" -}}
+{{- end -}}
+{{- if not .Values.shadow.suspend -}}
+{{- fail "Cannot activate CronJobs from this phase 1 chart: shadow.suspend must stay true" -}}
+{{- end -}}
+{{- range .Values.jobs }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .name | quote }}
+  namespace: {{ $.Values.shadow.namespace | quote }}
+  labels:
+    app.kubernetes.io/name: news-radar
+    app.kubernetes.io/component: shadow-collector
+    news-radar/phase: shadow
+spec:
+  timeZone: Asia/Phnom_Penh
+  schedule: {{ .schedule | quote }}
+  suspend: true
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 600
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: news-radar
+            news-radar/phase: shadow
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext:
+            runAsUser: 10001
+            runAsGroup: 10001
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: news-collector
+              image: {{ printf "%s:%s" $.Values.image.repository $.Values.image.tag | quote }}
+              imagePullPolicy: {{ $.Values.image.pullPolicy }}
+              command: ["python", {{ printf "/app/%s" .script | quote }}]
+              args: ["--dry-run", "--test-mode"]
+              env:
+                - name: TZ
+                  value: Asia/Phnom_Penh
+                - name: PYTHONUNBUFFERED
+                  value: "1"
+                - name: PYTHONDONTWRITEBYTECODE
+                  value: "1"
+              securityContext:
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+{{ toYaml $.Values.resources | indent 16 }}
+              volumeMounts:
+                - name: ephemeral-reports
+                  mountPath: /app/out
+          volumes:
+            - name: ephemeral-reports
+              emptyDir:
+                sizeLimit: 8Mi
+{{- end }}

@@ -1,0 +1,15 @@
+.git
+.github
+infra
+tests
+out
+state
+__pycache__
+*.pyc
+*.tfstate*
+.terraform
+.env
+.env.*
+*.log
+README.md
+CHANNEL_DIGESTS.md
