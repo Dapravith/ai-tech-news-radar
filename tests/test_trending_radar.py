@@ -209,12 +209,39 @@ class TrendingRadarTests(unittest.TestCase):
             self.assertFalse((Path(folder) / "trending.json").exists())
 
     def test_all_feeds_fail_without_public_alert(self):
-        with (patch.object(radar, "FEEDS", {"World": [("Broken", "https://invalid.invalid")]}),
-              patch.object(radar, "fetch_feed", side_effect=OSError("offline")),
+        # Never read production-delivery state in a unit test: once the actual
+        # daily briefing is delivered, its marker correctly makes main() return
+        # 0 before any feed lookup. Fix both the state and clock for isolation.
+        with (tempfile.TemporaryDirectory() as folder,
+              patch.object(radar, "STATE_FILE", Path(folder) / "trending.json"),
+              patch.object(radar, "TECH_STATE_FILE", Path(folder) / "tech.json"),
+              patch.object(radar, "OUTPUT_FILE", Path(folder) / "report.txt"),
+              patch.object(radar, "utc_now", return_value=NOW),
+              patch.object(radar, "FEEDS", {"World": [("Broken", "https://invalid.invalid")]}),
+              patch.object(radar, "fetch_feed", side_effect=OSError("offline")) as fetch,
               patch.object(radar, "send_telegram") as send,
               patch.object(sys, "argv", ["trending_radar.py"])):
             self.assertEqual(radar.main(), 1)
+            fetch.assert_called_once()
             send.assert_not_called()
+            self.assertFalse((Path(folder) / "trending.json").exists())
+
+    def test_already_delivered_today_skips_feed_outage_and_public_post(self):
+        with tempfile.TemporaryDirectory() as folder:
+            state = Path(folder) / "trending.json"
+            state.write_text(json.dumps({radar.LAST_REPORT_KEY: NOW.isoformat()}))
+            with (patch.object(radar, "STATE_FILE", state),
+                  patch.object(radar, "TECH_STATE_FILE", Path(folder) / "tech.json"),
+                  patch.object(radar, "utc_now", return_value=NOW + timedelta(hours=3)),
+                  patch.object(radar, "FEEDS", {"World": [("Broken", "https://invalid.invalid")]}),
+                  patch.object(radar, "fetch_feed", side_effect=OSError("offline")) as fetch,
+                  patch.object(radar, "send_telegram") as send,
+                  patch.object(sys, "argv", ["trending_radar.py"])):
+                self.assertEqual(radar.main(), 0)
+                fetch.assert_not_called()
+                send.assert_not_called()
+                self.assertEqual(json.loads(state.read_text()),
+                                 {radar.LAST_REPORT_KEY: NOW.isoformat()})
 
     def test_missing_category_warning_and_empty_test_message(self):
         report, included = radar.render_report([], NOW, test_mode=True, partial=True,
