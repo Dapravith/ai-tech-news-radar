@@ -1,0 +1,40 @@
+# FAIL-SAFE: these jobs are suspended, shadow only, with dry-run and test flags.
+# Never activate publishing by merely changing a Helm value.
+shadow:
+  suspend: true
+  namespace: news-radar-shadow
+
+image:
+  repository: ghcr.io/dapravith/ai-tech-news-radar
+  # Set to an immutable CI-produced image digest/tag before enabling shadow jobs.
+  tag: shadow-not-built
+  pullPolicy: IfNotPresent
+
+jobs:
+  - name: cambodia-morning
+    schedule: "23 7 * * *"
+    script: cambodia_brief.py
+  - name: cambodia-afternoon
+    schedule: "23 12 * * *"
+    script: cambodia_brief.py
+  - name: cambodia-evening
+    schedule: "13 18 * * *"
+    script: cambodia_brief.py
+  - name: tech-radar
+    schedule: "37 0,3,6,9,12,15,18,21 * * *"
+    script: news_radar.py
+  - name: trending
+    schedule: "9 9 * * *"
+    script: trending_radar.py
+  - name: channel-digests
+    schedule: "11 8 * * *"
+    script: channel_digest.py
+
+# Conservative single-node K3s footprint.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
