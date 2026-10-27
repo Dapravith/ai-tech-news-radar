@@ -1,0 +1,9 @@
+{
+  "name": "Hermes News Research Sandbox",
+  "description": "Offline test fixture only, not a live Hermes service",
+  "url": "http://127.0.0.1:9900",
+  "version": "1.0.0",
+  "skills": [
+    {"id": "research", "name": "Research News", "description": "Analyze pre-selected trusted sources"}
+  ]
+}
