@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 import sys
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import Request, HTTPRedirectHandler, build_opener
 
 PATH = "/.well-known/agent-card.json"
 
@@ -47,13 +47,19 @@ def validate_card(data: object) -> dict:
             "checked": "Agent Card only; task execution, model availability, secrets and persistence NOT tested"}
 
 
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        # Never allow a redirect to forward a per-peer bearer token elsewhere.
+        raise ValueError("Agent Card redirected; inspect the gateway URL")
+
+
 def probe(origin: str, token: str = "", timeout: float = 8.0) -> dict:
     url = safe_agent_url(origin)
     headers = {"Accept": "application/json", "User-Agent": "news-radar-readonly-check/1.0"}
     if token:
         headers["Authorization"] = "Bearer " + token
     req = Request(url, headers=headers, method="GET")
-    with urlopen(req, timeout=timeout) as response:
+    with build_opener(NoRedirect()).open(req, timeout=timeout) as response:
         if response.status != 200:
             raise ValueError("A2A Agent Card did not return 200")
         payload = response.read(65537)
