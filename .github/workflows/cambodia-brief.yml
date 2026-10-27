@@ -1,10 +1,12 @@
-name: Cambodia News Brief - Morning and Evening ICT
+name: Cambodia News Brief - Morning Afternoon Evening ICT
 
 on:
   schedule:
     # Cambodia ICT is UTC+7. Off the hour to reduce GitHub scheduler contention.
     - cron: '23 0 * * *'   # 07:23 ICT, morning
     - cron: '53 0 * * *'   # 07:53 ICT, morning recovery
+    - cron: '23 5 * * *'   # 12:23 ICT, afternoon
+    - cron: '53 5 * * *'   # 12:53 ICT, afternoon recovery
     - cron: '13 11 * * *'  # 18:13 ICT, evening
     - cron: '43 11 * * *'  # 18:43 ICT, evening recovery
   workflow_dispatch:
@@ -82,6 +84,8 @@ jobs:
       # Optional: user must provide a private news chat ID as an Actions secret.
       TELEGRAM_NEWS_CHAT_ID: ${{ secrets.TELEGRAM_NEWS_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}
       TELEGRAM_NEWS_CHANNEL_ID: '@dailynewsagents'
+      # Original cron lets the report display real GitHub scheduling delays.
+      NEWS_SCHEDULE_CRON: ${{ github.event.schedule }}
       TEST_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.test_mode == true && 'true' || 'false' }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && 'true' || 'false' }}
       PYTHONUNBUFFERED: '1'
