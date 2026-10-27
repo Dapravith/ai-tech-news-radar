@@ -39,6 +39,8 @@ class ShadowDeploymentContract(unittest.TestCase):
             self.assertIn(text, self.chart)
         self.assertRegex(self.docker, r"USER\s+10001:10001")
         self.assertIn('ENTRYPOINT ["python"]', self.docker)
+        self.assertIn("COPY --chown=10001:10001 scripts/smoke_container.py", self.docker)
+
 
     def test_terraform_scope_cannot_be_redirected_to_production(self):
         self.assertIn('default     = "news-radar-shadow"', self.vars)
