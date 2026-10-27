@@ -50,7 +50,7 @@ jobs:
         with:
           terraform_version: '1.10.5'
       - name: Check Terraform formatting
-        run: terraform -chdir=infra/terraform fmt -check -recursive
+        run: terraform -chdir=infra/terraform fmt -check -diff -recursive
       - name: Initialize providers WITHOUT backend or cluster credentials
         run: terraform -chdir=infra/terraform init -backend=false -input=false
       - name: Validate local configuration
