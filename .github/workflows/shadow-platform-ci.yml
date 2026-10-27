@@ -102,3 +102,9 @@ jobs:
           docker run --rm --network none --read-only \
             --tmpfs /app/out:uid=10001,gid=10001 \
             radar-shadow:ci -c "import news_radar, trending_radar, channel_digest, cambodia_brief; print('Modules import cleanly')"
+      - name: End-to-end news smoke with no network, credentials or writable root
+        run: |
+          docker run --rm --network none --read-only \
+            --tmpfs /app/out:uid=10001,gid=10001 \
+            --env TELEGRAM_BOT_TOKEN= \
+            radar-shadow:ci -m scripts.smoke_container
