@@ -108,3 +108,51 @@ jobs:
             --tmpfs /app/out:uid=10001,gid=10001 \
             --env TELEGRAM_BOT_TOKEN= \
             radar-shadow:ci -m scripts.smoke_container
+
+  kubernetes-integration:
+    name: Ephemeral Kubernetes admission and real pod smoke (no production)
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v5
+      - uses: helm/kind-action@v1.14.0
+        with:
+          cluster_name: radar-ci
+      - uses: azure/setup-helm@v4.3.0
+        with:
+          version: 'v3.17.3'
+      - name: Build and load a local-only image (no registry publish)
+        run: |
+          docker build --pull --tag radar-shadow:ci .
+          kind load docker-image radar-shadow:ci --name radar-ci
+      - name: Create throwaway restricted shadow namespace
+        run: |
+          kubectl create namespace news-radar-shadow
+          kubectl label namespace news-radar-shadow pod-security.kubernetes.io/enforce=restricted
+      - name: Admit six SUSPENDED Helm CronJobs into Kubernetes
+        shell: bash
+        run: |
+          set -euo pipefail
+          helm template radar-shadow deploy/helm/news-radar \
+            --namespace news-radar-shadow \
+            --set image.repository=radar-shadow \
+            --set image.tag=ci \
+            --set image.pullPolicy=Never > /tmp/shadow.yaml
+          kubectl apply -f /tmp/shadow.yaml
+          test "$(kubectl -n news-radar-shadow get cronjobs -o name | wc -l)" -eq 6
+          test "$(kubectl -n news-radar-shadow get cronjobs -o jsonpath='{range .items[*]}{.spec.suspend}{"\n"}{end}' | grep -c '^true$')" -eq 6
+          test "$(kubectl -n news-radar-shadow get jobs -o name | wc -l)" -eq 0
+      - name: Run one offline shadow job using the real Kubernetes executor
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl apply -f deploy/k8s/shadow-smoke-job.yaml
+          kubectl -n news-radar-shadow wait --for=condition=complete job/phase2-shadow-smoke --timeout=180s
+          kubectl -n news-radar-shadow logs job/phase2-shadow-smoke | grep 'PASS: offline, read-only, nonroot, no-network news run and no Telegram'
+      - name: Failure diagnostics (non-secret, ephemeral cluster)
+        if: failure()
+        run: |
+          kubectl -n news-radar-shadow get pods,jobs,cronjobs -o wide || true
+          kubectl -n news-radar-shadow describe job phase2-shadow-smoke || true
+          kubectl -n news-radar-shadow get events --sort-by=.lastTimestamp || true
+          kubectl -n news-radar-shadow logs job/phase2-shadow-smoke --all-containers=true || true
