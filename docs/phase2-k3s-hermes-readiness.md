@@ -3,14 +3,21 @@
 ## Scope and boundary
 
 The Phase 1 shadow platform in PR #15 has no running K3s cluster and no real Hermes.
-This Phase 2 change adds **read-only** cluster and A2A checks, plus a full offline
-Docker smoke test. No VPS is provisioned, SSH connection attempted, Telegram messages
-sent, production cron switched, secret created, or Kubernetes object applied.
+This Phase 2 change adds **read-only** cluster and A2A checks, a full offline
+Docker smoke test, and a throwaway **kind Kubernetes cluster in GitHub CI** that
+admits the six suspended Helm CronJobs and runs one network-independent smoke Job.
+Only that disposable CI cluster receives Kubernetes objects. No production VPS is
+provisioned, SSH connection attempted, Telegram message sent, production cron
+switched, or real-server Kubernetes object applied.
 
 ### Known pipeline incidents (evidence)
 - PR #15's first Terraform CI run failed on `terraform fmt -check` (main.tf
   label alignment); a subsequent commit corrected formatting. Latest run
   40463964229: Terraform, Helm, Python and Docker checks all succeeded.
+- During Hermes A2A probe hardening, CI failed because one test still mocked
+  `urlopen` after the implementation switched to a no-redirect HTTP opener.
+  The test was updated and the latest CI run passed. No production workflow was
+  affected.
 - Previous Docker job only imported modules. It could not detect an unusable
   read-only filesystem, a broken RSS dry-run route, missing state defaults,
   bad destination rendering or a mistakenly enabled Telegram send.
@@ -46,6 +53,18 @@ docker run --rm --network none --read-only \
   -e TELEGRAM_BOT_TOKEN= \
   news-radar:shadow -m scripts.smoke_container
 ```
+
+### Kubernetes API integration (CI only)
+
+GitHub Actions starts a disposable kind cluster (not the real K3s host),
+loads a locally built image without publishing to a registry, applies six
+**suspended** CronJobs, verifies that no scheduled Jobs were created,
+and manually executes `deploy/k8s/shadow-smoke-job.yaml` under restricted
+nonroot settings. The Job uses fixture data, does not need external RSS,
+has no Telegram secret, and exits only when it has produced a correct
+AFTERNOON report. The CI cluster is discarded after the run. This proves
+Kubernetes admission and representative container execution, **not**
+live K3s availability or provider-network behavior.
 
 ### Verify an approved existing K3s cluster (read only)
 ```bash
@@ -103,7 +122,7 @@ gateway lifecycle are platform-dependent and await a real approved host.
 ### Exit criteria before K3s/Hermes live work
 
 - [ ] Phase 1 PR #15 reviewed and merged (not forced by this PR)
-- [ ] Container actually generates a valid dry-run report offline
+- [x] Container and ephemeral Kubernetes Job generate valid dry-run reports offline
 - [ ] Cluster preflight detects unhealthy nodes and unsupported versions
 - [ ] Hermes A2A probe validates card and rejects unsafe remote HTTP URLs
 - [ ] Nonproduction K3s host and backup are identified; estimated monthly cost approved
