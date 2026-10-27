@@ -10,9 +10,9 @@ resource "kubernetes_namespace_v1" "shadow" {
   metadata {
     name = var.namespace
     labels = {
-      "app.kubernetes.io/name"       = "ai-tech-news-radar"
-      "app.kubernetes.io/part-of"    = "news-intelligence"
-      "news-radar/phase"             = "shadow"
+      "app.kubernetes.io/name"             = "ai-tech-news-radar"
+      "app.kubernetes.io/part-of"          = "news-intelligence"
+      "news-radar/phase"                   = "shadow"
       "pod-security.kubernetes.io/enforce" = "restricted"
     }
   }
