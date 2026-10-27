@@ -68,10 +68,79 @@ TOPICS = {
 }
 
 
+# Reporting periods are wall-clock dayparts in Cambodia (ICT), not labor-law shifts.
+# A delayed GitHub Action must be classified by when it actually runs.
+DAYPART_HEADINGS = {
+    "overnight": "🌙 OVERNIGHT",
+    "morning": "☀️ MORNING",
+    "afternoon": "🌤️ AFTERNOON",
+    "evening": "🌆 EVENING",
+}
+SCHEDULED_SLOTS = {
+    "23 0 * * *": ("Morning", 7, 23),
+    "53 0 * * *": ("Morning recovery", 7, 53),
+    "23 5 * * *": ("Afternoon", 12, 23),
+    "53 5 * * *": ("Afternoon recovery", 12, 53),
+    "13 11 * * *": ("Evening", 18, 13),
+    "43 11 * * *": ("Evening recovery", 18, 43),
+}
+
+
 def slot_for_time(now: datetime) -> str:
     local = now.astimezone(TZ_KH)
-    # Morning requests are scheduled before noon; evening after noon.
-    return local.strftime("%Y-%m-%d") + (":morning" if local.hour < 12 else ":evening")
+    hour = local.hour
+    if hour < 5:
+        daypart = "overnight"
+    elif hour < 12:
+        daypart = "morning"
+    elif hour < 18:
+        daypart = "afternoon"
+    else:
+        daypart = "evening"
+    return f"{local:%Y-%m-%d}:{daypart}"
+
+
+def scheduled_delay_notice(now: datetime, cron: str) -> str | None:
+    """Show real scheduling delays; never imply Github cron is exact-time."""
+    if cron not in SCHEDULED_SLOTS:
+        return None
+    name, hour, minute = SCHEDULED_SLOTS[cron]
+    local = now.astimezone(TZ_KH)
+    planned = local.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if planned > local:
+        planned -= timedelta(days=1)
+    delay = max(0, int((local - planned).total_seconds() // 60))
+    if delay < 30:
+        return None
+    return (f"⚠️ <i>Delayed GitHub schedule: {html.escape(name)} "
+            f"{planned:%Y-%m-%d %H:%M} ICT → actual {local:%H:%M} ICT "
+            f"({delay // 60}h {delay % 60}m late). "
+            "Period reflects the actual Cambodia clock time.</i>")
+
+
+def normalize_state_slots(state: dict) -> dict:
+    """Repair saved daypart keys incorrectly classified by older versions.
+
+    Article delivery timestamps are recorded on Telegram API acknowledgement,
+    so they're a more reliable basis for classifying a slot than its old name.
+    """
+    seen = state["seen"]
+    corrected = {}
+    for old_slot, record in state["slots"].items():
+        new_slot = old_slot
+        if isinstance(record, dict):
+            for article_id in record.get("ids", []):
+                try:
+                    delivered = datetime.fromisoformat(seen[article_id])
+                except (KeyError, ValueError, TypeError):
+                    continue
+                if delivered.tzinfo is not None:
+                    new_slot = slot_for_time(delivered)
+                    break
+        existing = corrected.setdefault(new_slot, {"ids": [], "sent": {}})
+        existing["ids"] = sorted(set(existing["ids"]) | set(record.get("ids", [])))
+        existing["sent"].update(record.get("sent", {}))
+    return {"seen": seen, "slots": corrected}
 
 
 def load_state(path: Path = STATE_FILE) -> dict:
@@ -81,7 +150,7 @@ def load_state(path: Path = STATE_FILE) -> dict:
         return {"seen": {}, "slots": {}}
     if not isinstance(parsed, dict) or not isinstance(parsed.get("seen"), dict) or not isinstance(parsed.get("slots"), dict):
         raise ValueError("Invalid Cambodia delivery state")
-    return parsed
+    return normalize_state_slots(parsed)
 
 
 def save_state(state: dict, path: Path = STATE_FILE) -> None:
@@ -137,13 +206,16 @@ def select(articles: list[dict], seen: dict, now: datetime, *, limit: int = MAX_
     return output
 
 
-def render(items: list[dict], now: datetime, *, period: str, partial: bool, test_mode: bool) -> str:
-    heading = "☀️ MORNING" if period == "morning" else "🌆 EVENING"
+def render(items: list[dict], now: datetime, *, period: str, partial: bool,
+           test_mode: bool, delayed_notice: str | None = None) -> str:
+    heading = DAYPART_HEADINGS[period]
     intro = [
         f"🇰🇭 <b>CAMBODIA NEWS · ព័ត៌មានកម្ពុជា · {heading}</b>",
         f"🕒 <b>Report:</b> {html.escape(report_timestamp(now))}",
         f"📰 <b>{len(items)} curated headlines</b> · No endless scrolling",
     ]
+    if delayed_notice:
+        intro.append(delayed_notice)
     if test_mode:
         intro.append("🧪 <i>TEST / PREVIEW: previously reported stories may appear</i>")
     if partial:
@@ -219,7 +291,11 @@ def run(now: datetime, state_path: Path, *, dry_run: bool, test_mode: bool,
         prepared = select([indexed[k] for k in record["ids"] if k in indexed], {}, now)
         if prepared:
             fresh = prepared
-    message = render(fresh, now, period=period, partial=bool(failures), test_mode=test_mode)
+    notice = scheduled_delay_notice(now, os.getenv("NEWS_SCHEDULE_CRON", "").strip())
+    if notice:
+        logging.warning("Delayed scheduled execution, report reclassified to %s ICT", period)
+    message = render(fresh, now, period=period, partial=bool(failures),
+                     test_mode=test_mode, delayed_notice=notice)
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_FILE.write_text(message + "\n", encoding="utf-8")
     if dry_run:
