@@ -48,10 +48,16 @@ class HermesReadinessTests(unittest.TestCase):
             def __enter__(self): return self
             def __exit__(self, *_): return False
             def read(self, count): return json.dumps(CARD).encode()
-        with patch.object(hermes, "urlopen", return_value=FakeResponse()) as http:
+        class FakeOpener:
+            def open(self, request, timeout):
+                self.request = request
+                return FakeResponse()
+        opener = FakeOpener()
+        with patch.object(hermes, "build_opener", return_value=opener) as factory:
             result = hermes.probe("http://127.0.0.1:9900", "sensitive-test-token")
             self.assertTrue(result["ready"])
-            request = http.call_args.args[0]
+            self.assertIsInstance(factory.call_args.args[0], hermes.NoRedirect)
+            request = opener.request
             self.assertEqual(request.get_method(), "GET")
             self.assertEqual(request.full_url, "http://127.0.0.1:9900/.well-known/agent-card.json")
             self.assertEqual(request.headers["Authorization"], "Bearer sensitive-test-token")
