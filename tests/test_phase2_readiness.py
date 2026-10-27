@@ -42,6 +42,15 @@ class HermesReadinessTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 hermes.validate_card(card)
 
+    def test_a2a_card_redirect_is_rejected(self):
+        handler = hermes.NoRedirect()
+        with self.assertRaisesRegex(ValueError, "redirected"):
+            handler.redirect_request(
+                None, None, 302, "Moved",
+                {"Location": "https://untrusted.example/agent"},
+                "https://untrusted.example/agent",
+            )
+
     def test_probe_only_gets_card_never_posts_task(self):
         class FakeResponse:
             status = 200
