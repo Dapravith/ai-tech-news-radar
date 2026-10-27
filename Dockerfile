@@ -5,6 +5,7 @@ WORKDIR /app
 RUN groupadd --gid 10001 radar && useradd --uid 10001 --gid 10001 --home-dir /app --no-create-home radar
 COPY --chown=10001:10001 news_radar.py trending_radar.py channel_digest.py cambodia_brief.py ./
 COPY --chown=10001:10001 config/ ./config/
+COPY --chown=10001:10001 scripts/smoke_container.py ./scripts/smoke_container.py
 RUN mkdir -p /app/state /app/out && chown -R 10001:10001 /app/state /app/out
 USER 10001:10001
 ENTRYPOINT ["python"]
