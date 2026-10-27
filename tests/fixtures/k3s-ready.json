@@ -1,0 +1,19 @@
+{
+  "version": {"serverVersion": {"major": "1", "minor": "32"}},
+  "nodes": {
+    "items": [
+      {
+        "metadata": {"name": "test-k3s-node"},
+        "status": {
+          "conditions": [
+            {"type": "Ready", "status": "True"},
+            {"type": "MemoryPressure", "status": "False"},
+            {"type": "DiskPressure", "status": "False"},
+            {"type": "PIDPressure", "status": "False"}
+          ],
+          "allocatable": {"cpu": "2", "memory": "3Gi", "pods": "110"}
+        }
+      }
+    ]
+  }
+}
