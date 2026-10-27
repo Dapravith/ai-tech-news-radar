@@ -1,0 +1,104 @@
+name: Terraform and K3s Shadow Platform - Safety CI
+
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.gitignore'
+      - 'infra/**'
+      - 'deploy/**'
+      - 'tests/**'
+      - 'news_radar.py'
+      - 'cambodia_brief.py'
+      - 'trending_radar.py'
+      - 'channel_digest.py'
+      - '.github/workflows/shadow-platform-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.gitignore'
+      - 'infra/**'
+      - 'deploy/**'
+      - 'tests/**'
+      - '.github/workflows/shadow-platform-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  python-contracts:
+    name: Python regression and shadow contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests -v
+
+  terraform-check:
+    name: Terraform fmt and validate (no plan/apply)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.10.5'
+      - name: Check Terraform formatting
+        run: terraform -chdir=infra/terraform fmt -check -recursive
+      - name: Initialize providers WITHOUT backend or cluster credentials
+        run: terraform -chdir=infra/terraform init -backend=false -input=false
+      - name: Validate local configuration
+        run: terraform -chdir=infra/terraform validate
+
+  helm-check:
+    name: Helm chart validates and fails closed
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: azure/setup-helm@v4.3.0
+        with:
+          version: 'v3.17.3'
+      - run: helm lint deploy/helm/news-radar
+      - name: Render suspended, timezone-scoped CronJobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          helm template radar-shadow deploy/helm/news-radar \
+            --namespace news-radar-shadow > /tmp/radar-shadow.yaml
+          test "$(grep -c '^kind: CronJob' /tmp/radar-shadow.yaml)" -eq 6
+          test "$(grep -c '^  suspend: true' /tmp/radar-shadow.yaml)" -eq 6
+          test "$(grep -c 'args: \["--dry-run", "--test-mode"\]' /tmp/radar-shadow.yaml)" -eq 6
+          test "$(grep -c 'timeZone: Asia/Phnom_Penh' /tmp/radar-shadow.yaml)" -eq 6
+      - name: Intentional unsafe changes MUST fail template compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if helm template radar-shadow deploy/helm/news-radar --set shadow.suspend=false > /dev/null 2>&1; then
+            echo "::error::Unsafe unsuspend override was accepted"
+            exit 1
+          fi
+          if helm template radar-shadow deploy/helm/news-radar --set shadow.namespace=default > /dev/null 2>&1; then
+            echo "::error::Unsafe namespace override was accepted"
+            exit 1
+          fi
+
+  docker-check:
+    name: Build and import Python modules as nonroot
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build development image (never publish to registry)
+        run: docker build --pull --tag radar-shadow:ci .
+      - name: Validate runtime without secrets, network or writable root
+        run: |
+          docker run --rm --network none --read-only \
+            --tmpfs /app/out:uid=10001,gid=10001 \
+            radar-shadow:ci -c "import news_radar, trending_radar, channel_digest, cambodia_brief; print('Modules import cleanly')"
