@@ -26,6 +26,11 @@ Telegram bot token or an AI translation credential.
 | Gadget Friday | 17:15 Friday | `15 10 * * 5` |
 
 These are best-effort GitHub Actions cron times, **not guarantees**.
+A scheduled visual edition now refuses publishing when GitHub starts it more than
+**90 minutes** after its planned UTC cron, or when the event cron does not
+match the edition. This causes an operational failure alert instead of
+mislabeling yesterday's/morning's headlines as an on-time report. A delayed
+job must not be blindly rerun.
 Different editions have separate state keys; Cambodia has distinct dayparts.
 
 ## Source controls
@@ -54,7 +59,7 @@ Different editions have separate state keys; Cambodia has distinct dayparts.
 The optional `OPENROUTER_API_KEY` batches **faithful Khmer translation** of
 headlines and limited source excerpts (from direct feeds only). The response
 must reuse the original item ID, use Khmer script, and introduce **no new
-Arabic-numeral figures**. The numeric check is partial; it is **not** complete
+Arabic or Khmer numeric figures** (both scripts are normalized before comparison). The numeric check is partial; it is **not** complete
 semantic fact verification. When AI is unavailable, existing Khmer headlines
 are preserved; an English headline remains attributed in its original text,
 accompanied by a cautious Khmer note directing readers to the original source.
@@ -122,7 +127,10 @@ when qualifying articles are found.
 Telegram photo and message are **two independent HTTP calls**. If the first
 succeeds and the second fails, the application records `photo_sent` and the
 exact full report. After a state commit, a later run can resume the text
-without re-sending the photo. Both destinations are tracked separately.
+without re-sending the photo. Both destinations are tracked separately. The platform records Telegram photo and text message IDs
+when acknowledged, enabling incident reconciliation. If two recipients would
+receive a different story selection within one delivery slot, publishing
+fails closed rather than silently generating mismatched posts.
 `--merge-state` uses monotonic acknowledgements so a concurrent state merge
 cannot erase an acknowledged step.
 
