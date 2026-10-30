@@ -1,0 +1,292 @@
+name: Khmer Visual News - Cambodia Global Tech Gadget
+
+on:
+  schedule:
+    # ICT is UTC+7. GitHub Actions scheduling is best-effort, not an SLA.
+    - cron: '5 2 * * *'      # Cambodia morning, 09:05 ICT
+    - cron: '5 6 * * *'      # Cambodia afternoon, 13:05 ICT
+    - cron: '5 12 * * *'     # Cambodia evening, 19:05 ICT
+    - cron: '25 3 * * *'     # Global, 10:25 ICT
+    - cron: '25 9 * * *'     # AI/software, 16:25 ICT
+    - cron: '15 10 * * 5'   # Gadget Friday, 17:15 ICT
+  workflow_dispatch:
+    inputs:
+      edition:
+        description: 'Edition for preview or private Telegram test'
+        type: choice
+        required: true
+        options: [cambodia, global, tech, gadget]
+        default: cambodia
+      dry_run:
+        description: 'Dry run: do not send Telegram'
+        type: boolean
+        default: true
+      test_private:
+        description: 'Send clearly labeled TEST poster only to private chat'
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - 'visual_news.py'
+      - 'visual_poster.py'
+      - 'requirements-visual.txt'
+      - 'scripts/visual_fixture_preview.py'
+      - 'tests/test_visual_news.py'
+      - '.github/workflows/visual-news.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'visual_news.py'
+      - 'visual_poster.py'
+      - 'requirements-visual.txt'
+      - 'scripts/visual_fixture_preview.py'
+      - 'tests/test_visual_news.py'
+      - '.github/workflows/visual-news.yml'
+
+permissions:
+  contents: read
+
+# Separate from existing GitHub text-news publisher. Never run multiple
+# visual deliveries at once: their state file is shared across editions.
+concurrency:
+  group: visual-news-publisher
+  cancel-in-progress: false
+
+jobs:
+  offline-tests:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Existing publishers and visual editorial unit tests
+        run: python -m unittest discover -s tests -v
+
+  poster-preview:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    needs: [offline-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install Khmer font and pinned Pillow for output QA
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-noto-core
+          python -m pip install -r requirements-visual.txt
+      - name: Render ALL FOUR editions using clearly fictional offline fixtures
+        run: python -m scripts.visual_fixture_preview
+      - name: Validate PNG dimensions, font rendering, and file size
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          editions = ("cambodia", "global", "tech", "gadget")
+          for name in editions:
+              path = Path("out/visual") / f"demo-{name}.png"
+              with Image.open(path) as picture:
+                  picture.verify()
+              with Image.open(path) as picture:
+                  assert picture.size == (1080, 1350)
+              assert 10_000 < path.stat().st_size < 9_000_000
+              print(f"Verified poster: {name}")
+          PY
+      - uses: actions/upload-artifact@v6
+        with:
+          name: khmer-news-poster-demos
+          path: out/visual/demo-*
+          retention-days: 7
+          if-no-files-found: error
+
+  live-rss-preview:
+    if: github.event_name == 'pull_request'
+    needs: [offline-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: [cambodia, global, tech, gadget]
+    env:
+      OPENROUTER_API_KEY: ''
+      VISUAL_NEWS_CHANNEL_ID: ''
+      VISUAL_NEWS_PRIVATE_CHAT_ID: ''
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-noto-core
+          python -m pip install -r requirements-visual.txt
+      - name: Fetch CURRENT RSS metadata and render without any Telegram credentials
+        run: python visual_news.py --edition ${{ matrix.edition }} --dry-run
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: visual-live-preview-${{ matrix.edition }}
+          path: out/visual/${{ matrix.edition }}-latest.*
+          retention-days: 3
+          if-no-files-found: ignore
+
+  publish:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      VISUAL_NEWS_ENABLED: ${{ vars.VISUAL_NEWS_ENABLED }}
+      CHANNEL: ${{ vars.VISUAL_NEWS_CHANNEL_ID || '@dailynewsagents' }}
+      PRIVATE_CHAT: ${{ secrets.TELEGRAM_NEWS_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}
+      NEWS_SCHEDULE_CRON: ${{ github.event.schedule }}
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Resolve edition and enforce deployment safety switch
+        id: mode
+        env:
+          DISPATCH_EDITION: ${{ inputs.edition }}
+          DISPATCH_DRY: ${{ inputs.dry_run }}
+          DISPATCH_PRIVATE: ${{ inputs.test_private }}
+          EVENT: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "schedule" ]; then
+            case "$NEWS_SCHEDULE_CRON" in
+              '5 2 * * *'|'5 6 * * *'|'5 12 * * *') edition=cambodia ;;
+              '25 3 * * *') edition=global ;;
+              '25 9 * * *') edition=tech ;;
+              '15 10 * * 5') edition=gadget ;;
+              *) echo "::error::Unrecognized scheduled edition"; exit 1 ;;
+            esac
+            if [ "$VISUAL_NEWS_ENABLED" != 'true' ]; then
+              echo "Visual news schedule is configured but opt-in is OFF. No post."
+              echo "active=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "dry=false" >> "$GITHUB_OUTPUT"
+            echo "private_only=false" >> "$GITHUB_OUTPUT"
+          else
+            edition="$DISPATCH_EDITION"
+            if [ "$DISPATCH_DRY" != 'false' ]; then
+              echo "dry=true" >> "$GITHUB_OUTPUT"
+              echo "private_only=true" >> "$GITHUB_OUTPUT"
+            elif [ "$DISPATCH_PRIVATE" = 'true' ]; then
+              echo "dry=false" >> "$GITHUB_OUTPUT"
+              echo "private_only=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::Manual publishing must be a dry-run or a private test."
+              exit 1
+            fi
+          fi
+          echo "edition=$edition" >> "$GITHUB_OUTPUT"
+          echo "active=true" >> "$GITHUB_OUTPUT"
+      - name: Setup pinned poster dependencies
+        if: steps.mode.outputs.active == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-noto-core
+          python -m pip install -r requirements-visual.txt
+      - name: Run editorial tests before sending
+        if: steps.mode.outputs.active == 'true'
+        run: python -m unittest discover -s tests -v
+      - name: Compose and publish selected edition
+        if: steps.mode.outputs.active == 'true'
+        id: delivery
+        shell: bash
+        env:
+          EDITION: ${{ steps.mode.outputs.edition }}
+          DRY: ${{ steps.mode.outputs.dry }}
+          PRIVATE_ONLY: ${{ steps.mode.outputs.private_only }}
+        run: |
+          set -euo pipefail
+          if [ "$PRIVATE_ONLY" = 'true' ]; then
+            export VISUAL_NEWS_CHANNEL_ID=''
+            export VISUAL_NEWS_PRIVATE_CHAT_ID="$PRIVATE_CHAT"
+            if [ -z "$VISUAL_NEWS_PRIVATE_CHAT_ID" ] && [ "$DRY" != 'true' ]; then
+              echo "::error::Private bot chat ID missing"; exit 1
+            fi
+          else
+            export VISUAL_NEWS_CHANNEL_ID="$CHANNEL"
+            export VISUAL_NEWS_PRIVATE_CHAT_ID="$PRIVATE_CHAT"
+          fi
+          if [ "$DRY" = 'true' ]; then
+            python visual_news.py --edition "$EDITION" --dry-run
+          elif [ "$PRIVATE_ONLY" = 'true' ]; then
+            python visual_news.py --edition "$EDITION" --test-mode
+          else
+            export VISUAL_REQUIRE_KHMER=true
+            python visual_news.py --edition "$EDITION"
+          fi
+      - name: Preserve PNG and full Khmer report
+        if: always() && steps.mode.outputs.active == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: visual-news-${{ steps.mode.outputs.edition }}
+          path: out/visual/*
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: Persist sent stages even after partial delivery errors
+        if: ${{ always() && steps.delivery.outcome != 'skipped' && steps.mode.outputs.dry == 'false' && steps.mode.outputs.private_only == 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot="${RUNNER_TEMP}/visual-acknowledged.json"
+          cp state/visual_seen.json "$snapshot"
+          git config user.name "ai-tech-radar[bot]"
+          git config user.email "ai-tech-radar[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git fetch --no-tags origin main
+            git reset --hard origin/main
+            python visual_news.py --merge-state "$snapshot"
+            git add state/visual_seen.json
+            if git diff --cached --quiet; then exit 0; fi
+            git commit -m "chore: persist visual news delivery stages [skip ci]"
+            if git push origin HEAD:main; then exit 0; fi
+            sleep "$attempt"
+          done
+          echo "::error::Telegram may have received a poster but delivery state was not persisted"
+          exit 1
+
+  notify-failure:
+    if: ${{ always() && needs.publish.result == 'failure' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    needs: [publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      PRIVATE_CHAT: ${{ secrets.TELEGRAM_NEWS_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - name: Alert privately, never to the public news channel
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from urllib.request import Request, urlopen
+          token, chat = os.getenv("TELEGRAM_BOT_TOKEN"), os.getenv("PRIVATE_CHAT")
+          if not token or not chat:
+              print("No private alert configured")
+              raise SystemExit(0)
+          url = "https://api.telegram.org/bot" + token + "/sendMessage"
+          run = "https://github.com/" + os.environ["GITHUB_REPOSITORY"] + "/actions/runs/" + os.environ["GITHUB_RUN_ID"]
+          data = json.dumps({"chat_id": chat, "text": "🔴 KHMER VISUAL NEWS FAILED. Inspect delivery state before rerun.\n" + run}).encode()
+          with urlopen(Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST"), timeout=20) as response:
+              if not json.load(response).get("ok"):
+                  raise SystemExit("Private incident alert rejected")
+          PY

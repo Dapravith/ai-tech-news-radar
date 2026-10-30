@@ -17,6 +17,39 @@ All times below are **Cambodia ICT (UTC+7)**.
 
 The schedules are **best effort**. GitHub Actions may delay or occasionally skip cron jobs, even for public repositories; these are not precise or guaranteed execution times. Backup runs reduce the risk of missed daily delivery, but cannot guarantee exactly 08:00 or 09:00. Run history and real Telegram delivery should both be monitored.
 
+## Khmer visual news posters — photo + caption (opt-in)
+
+The new [visual publisher](visual_news.py) creates **1080×1350 PNG posters**
+using [Pillow](requirements-visual.txt) and an installed Khmer font with text
+shaping. Telegram receives a short photo caption plus a separate source-linked
+Khmer report. It reuses existing feeds, does not scrape Facebook or copy
+someone else's poster or branding, and keeps all existing text-news publishers.
+
+| Edition | Planned Cambodia publication | Original/source channels |
+| --- | --- | --- |
+| 🇰🇭 Cambodia visual | 09:05, 13:05, 19:05 daily | Reviewed Cambodia outlets from Google News (labeled indexed) |
+| 🌍 Global visual | 10:25 daily | BBC, Guardian, Deutsche Welle, reviewed publishers |
+| 💻 AI & software visual | 16:25 daily | Official blogs from OpenAI, Google, GitHub, Kubernetes, Python, Cloudflare, Spring, etc. |
+| 📱 Gadget Friday | Friday 17:15 | Direct MacRumors, Android Authority, GSMArena feeds and attributed indexed articles |
+
+The dedicated [GitHub Actions visual workflow](.github/workflows/visual-news.yml)
+contains these schedules but **will not publish automatically until**
+repository Actions variable `VISUAL_NEWS_ENABLED=true` is explicitly configured.
+Use manual **dry-run previews first**, then a clearly marked **private test**;
+manual public posting is intentionally blocked. Existing public text news
+continues unchanged.
+
+Headlines are translated into Khmer only when the optional model can translate
+them without introducing unsupported figures. In public production mode the
+visual workflow refuses an English-only poster. The caption preserves original
+publisher, source link, and distinguishes `Google News indexed` from an
+original article. No generic `✅ verified` badge is produced. An RSS headline
+alone is insufficient to assert detailed product specifications or prices.
+
+Read [visual operations, configuration, failure recovery and editorial
+limitations](docs/VISUAL_NEWS_OPERATIONS.md). Poster demos and live
+non-publishing previews are uploaded as PR workflow artifacts.
+
 ## Trusted sources and news quality
 
 - **World / business / culture:** BBC News, The Guardian and Deutsche Welle (direct publisher feeds).
