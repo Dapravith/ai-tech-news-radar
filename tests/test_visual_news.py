@@ -38,6 +38,13 @@ class StoryTrustTests(unittest.TestCase):
         forged = dict(story(), url="https://github.blog.evil.example/security")
         self.assertIsNone(v.normalize_story(forged, "tech", NOW))
 
+    def test_source_links_must_use_https_without_inline_credentials(self):
+        for url in ("http://github.blog/changelog/secure-release",
+                    "https://user:password@github.blog/changelog/secure-release",
+                    "https://github.blog.evil.example/release"):
+            with self.subTest(url=url):
+                self.assertIsNone(v.normalize_story(dict(story(), url=url), "tech", NOW))
+
     def test_google_index_requires_named_reviewed_publisher(self):
         raw = dict(story(), source="Google News Cambodia English",
                    publisher="Cambodianess",
@@ -94,6 +101,11 @@ class TranslationTests(unittest.TestCase):
         self.assertIn("សូមអានអត្ថបទដើម", item["khmer_summary"])
         self.assertEqual(item["translation_status"], "original_title")
 
+    def test_khmer_and_ascii_digits_are_compared_by_value(self):
+        self.assertEqual(v.extract_numbers("តម្លៃ ៨ និង 20.5"), {"8", "20.5"})
+        self.assertEqual(v.extract_numbers("8 vs ៨"), {"8"})
+        self.assertNotEqual(v.extract_numbers("១០០"), v.extract_numbers("200"))
+
     def test_khmer_headline_preserved(self):
         raw = dict(story(), title="ព័ត៌មានថ្មីអំពីសុវត្ថិភាព")
         item = v.normalize_story(raw, "tech", NOW)
@@ -133,6 +145,14 @@ class CaptionTests(unittest.TestCase):
     def test_telegram_photo_caption_within_limit(self):
         msg = v.short_caption([self.item], "tech", "2026-10-30 ICT")
         self.assertLess(len(msg), 921)
+
+    def test_late_cron_is_detected_in_utc(self):
+        intended = "5 2 * * *"
+        self.assertEqual(v.scheduled_lateness_minutes(
+            intended, datetime(2026, 10, 30, 2, 25, tzinfo=timezone.utc)), 20)
+        self.assertEqual(v.scheduled_lateness_minutes(
+            intended, datetime(2026, 10, 30, 4, 5, tzinfo=timezone.utc)), 120)
+        self.assertIsNone(v.scheduled_lateness_minutes("0 0 * * *", NOW))
 
     def test_different_editions_and_dayparts_get_distinct_keys(self):
         morning = datetime(2026, 10, 30, 1, tzinfo=timezone.utc)
@@ -238,6 +258,35 @@ class DeliveryTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Khmer translation unavailable"):
                 v.execute("tech", dry_run=False, test_mode=False,
                           channel="@example", private_chat="", now=NOW,
+                          state_path=self.state, output=Path(self.tmp.name) / "out")
+            send.assert_not_called()
+
+    def test_delayed_scheduled_run_does_not_collect_or_send(self):
+        intended = datetime(2026, 10, 30, 4, 5, tzinfo=timezone.utc)
+        with (patch.dict(os.environ, {"NEWS_SCHEDULE_CRON": "5 2 * * *"}),
+              patch.object(v, "collect") as collect,
+              patch.object(v, "send_edition") as send):
+            with self.assertRaisesRegex(RuntimeError, "too late"):
+                v.execute("cambodia", dry_run=False, test_mode=False,
+                          channel="@example", private_chat="", now=intended,
+                          state_path=self.state, output=Path(self.tmp.name) / "out")
+            collect.assert_not_called()
+            send.assert_not_called()
+
+    def test_partial_fanout_blocks_changed_story_selection(self):
+        slot = v.slot_for("tech", NOW)
+        v.save_state({"deliveries": {slot: {"destinations": {
+            "channel": {"photo_sent": True, "text_sent": True, "stories": ["old-digest"],
+                        "report": "Already delivered"}}
+        }}}, self.state)
+        new_item = dict(self.item, id="brand-new-story")
+        with (patch.dict(os.environ, {"NEWS_SCHEDULE_CRON": "", "OPENROUTER_API_KEY": ""}),
+              patch.object(v, "collect", return_value=(
+                  [new_item], {"eligible": 1, "working": ["GitHub"], "failed": []})),
+              patch.object(v, "send_edition") as send):
+            with self.assertRaisesRegex(RuntimeError, "selection changed"):
+                v.execute("tech", dry_run=False, test_mode=False,
+                          channel="@example", private_chat="private1", now=NOW,
                           state_path=self.state, output=Path(self.tmp.name) / "out")
             send.assert_not_called()
 
