@@ -191,13 +191,23 @@ class DeliveryTests(unittest.TestCase):
         self.assertTrue(merged["deliveries"][slot]["destinations"]["channel"]["text_sent"])
         self.assertEqual(merged["deliveries"][slot]["destinations"]["channel"]["report"], "original")
 
-    def test_dry_run_never_calls_telegram(self):
-        with (patch.object(v, "collect", return_value=([self.item], {"eligible": 1, "working": ["GitHub"], "failed": []})),
+    def test_dry_run_creates_report_without_telegram_or_state(self):
+        import sys
+        from types import SimpleNamespace
+        with (patch.object(v, "collect", return_value=(
+                  [self.item], {"eligible": 1, "working": ["GitHub"], "failed": []})),
               patch.object(v, "apply_khmer_translation"),
-              patch("visual_poster.render_poster", return_value=self.poster) if False else patch.object(v, "send_edition") as send):
-            # Separate render mock is unnecessary here: delivery is only reachable
-            # after successful render, and empty-token dry run must not send.
-            pass
+              patch.dict(sys.modules, {"visual_poster": SimpleNamespace(
+                  render_poster=lambda *args: self.poster)}),
+              patch.object(v, "send_edition") as send):
+            output = Path(self.tmp.name) / "out"
+            status = v.execute("tech", dry_run=True, test_mode=True,
+                               channel="", private_chat="", now=NOW,
+                               state_path=self.state, output=output)
+            self.assertEqual(status, 0)
+            self.assertTrue((output / "tech-latest.html").exists())
+            self.assertFalse(self.state.exists())
+            send.assert_not_called()
 
     def test_invalid_state_fails_closed(self):
         self.state.write_text("[]")
