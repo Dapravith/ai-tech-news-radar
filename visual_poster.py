@@ -39,6 +39,14 @@ def font(size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype(font_path(), size, layout_engine=ImageFont.Layout.RAQM)
 
 
+def latin_font(size: int) -> ImageFont.FreeTypeFont:
+    for path in ("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+                 "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"):
+        if Path(path).is_file():
+            return ImageFont.truetype(path, size)
+    raise RuntimeError("Latin font missing; install fonts-noto-core")
+
+
 def wrap(draw: ImageDraw.ImageDraw, value: str, face: ImageFont.FreeTypeFont,
          max_width: int, max_lines: int = 2) -> list[str]:
     """Wrap at words; for long unspaced Khmer use safe Unicode clusters."""
@@ -114,29 +122,30 @@ def render_poster(edition: str, stories: list[dict], stamp: str, destination: Pa
     for y in range(0, SIZE[1], 60):
         draw.line((0, y, SIZE[0], y), fill=(19, 27, 53), width=1)
     draw.rounded_rectangle((70, 74, 156, 158), radius=22, fill=(38, 123, 214))
-    draw.text((92, 91), "N", font=font(48), fill=PALE)
-    draw.text((180, 82), "AI TECH RADAR", font=font(44), fill=PALE)
-    draw.text((180, 143), "KHMER NEWS EDITION", font=font(23), fill=MUTED)
+    draw.text((92, 91), "N", font=latin_font(45), fill=PALE)
+    draw.text((180, 82), "AI TECH RADAR", font=latin_font(40), fill=PALE)
+    draw.text((180, 143), "KHMER NEWS EDITION", font=latin_font(21), fill=MUTED)
     draw.text((78, 242), names[edition][0], font=font(70), fill=PALE, language="km")
-    draw.text((80, 354), names[edition][1], font=font(40), fill=CYAN)
-    draw.text((80, 422), stamp[:40], font=font(26), fill=MUTED)
+    draw.text((80, 354), names[edition][1], font=latin_font(35), fill=CYAN)
+    draw.text((80, 422), stamp[:40], font=latin_font(24), fill=MUTED)
 
     title_font = font(37)
-    source_font = font(25)
+    source_font = latin_font(24)
     y0 = 510
     for index, story in enumerate(stories):
         y = y0 + index * 225
         accent = ACCENTS[index]
         draw.rounded_rectangle((78, y, 1002, y + 198), radius=24, fill=(31, 39, 73))
         draw.rounded_rectangle((78, y, 89, y + 198), radius=6, fill=accent)
-        draw.text((112, y + 16), f"{index + 1:02d}", font=font(30), fill=accent)
+        draw.text((112, y + 16), f"{index + 1:02d}", font=latin_font(29), fill=accent)
         headline = str(story.get("khmer_title") or story["title"])
-        lines = wrap(draw, headline, title_font, 790, max_lines=2)
-        draw_rows(draw, lines, 181, y + 11, title_font, PALE, 66)
+        headline_font = title_font if any("\u1780" <= ch <= "\u17ff" for ch in headline) else latin_font(33)
+        lines = wrap(draw, headline, headline_font, 790, max_lines=2)
+        draw_rows(draw, lines, 181, y + 11, headline_font, PALE, 66)
         publisher = str(story["publisher"])[:48]
         draw.text((181, y + 149), publisher, font=source_font, fill=MUTED)
     draw.line((80, 1230, 1002, 1230), fill=(78, 93, 131), width=2)
-    draw.text((80, 1252), "@dailynewsagents", font=font(26), fill=CYAN)
+    draw.text((80, 1252), "@dailynewsagents", font=latin_font(24), fill=CYAN)
     draw.text((565, 1252), "អានព័ត៌មានតាមប្រភពដើម", font=font(25),
               fill=MUTED, language="km")
     destination.parent.mkdir(parents=True, exist_ok=True)
