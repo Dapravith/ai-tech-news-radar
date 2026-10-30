@@ -311,5 +311,46 @@ class DeliveryTests(unittest.TestCase):
             v.read_state(self.state)
 
 
+
+class TelegramTransportTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.file = Path(self.tmp.name) / "poster.png"
+        self.file.write_bytes(b"\\x89PNG\\r\\n\\x1a\\n" + b"test-image-content")
+
+    def test_send_photo_uses_multipart_and_keeps_caption(self):
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *_): return False
+            def read(self): return b'{"ok":true,"result":{"message_id":112}}'
+
+        with patch.object(v, "urlopen", return_value=Response()) as http:
+            message_id = v.telegram_api(
+                "fake-token", "sendPhoto",
+                {"chat_id": "@example", "caption": "សេចក្ដីសង្ខេប"}, self.file
+            )
+        self.assertEqual(message_id, 112)
+        request = http.call_args.args[0]
+        self.assertEqual(request.get_method(), "POST")
+        self.assertTrue(request.full_url.endswith("/sendPhoto"))
+        self.assertIn("multipart/form-data", request.get_header("Content-type"))
+        self.assertIn(b'name="photo"', request.data)
+        self.assertIn(b'name="caption"', request.data)
+        self.assertIn("សេចក្ដីសង្ខេប".encode(), request.data)
+        self.assertIn(self.file.read_bytes(), request.data)
+
+    def test_telegram_rejection_fails_without_fake_acknowledgement(self):
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *_): return False
+            def read(self): return b'{"ok":false,"description":"Bad Request"}'
+        with patch.object(v, "urlopen", return_value=Response()):
+            with self.assertRaisesRegex(RuntimeError, "Telegram rejected sendMessage"):
+                v.telegram_api("fake-token", "sendMessage", {"chat_id": "1", "text": "test"})
+
+
+
+
 if __name__ == "__main__":
     unittest.main()
