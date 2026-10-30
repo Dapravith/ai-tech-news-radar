@@ -113,7 +113,10 @@ def normalize_story(raw: dict, edition: str, now: datetime) -> dict | None:
     limit = timedelta(days=8) if edition == "gadget" else timedelta(hours=36)
     if age > limit or age < timedelta(hours=-1):
         return None
-    host = (urlparse(url).hostname or "").lower()
+    parsed_url = urlparse(url)
+    if parsed_url.username or parsed_url.password:
+        return None
+    host = (parsed_url.hostname or "").lower()
     indexed = source.startswith("Google News")
     original = str(raw.get("publisher", "")).casefold().strip()
     if indexed:
@@ -307,6 +310,9 @@ def merge_state(current: dict, snapshot: dict) -> dict:
             if value.get("photo_sent") or value.get("text_sent"):
                 value["report"] = value.get("report") or stage.get("report", "")
                 value["stories"] = value.get("stories") or stage.get("stories", [])
+                for message_key in ("photo_message_id", "text_message_id"):
+                    if not value.get(message_key) and stage.get(message_key):
+                        value[message_key] = stage[message_key]
     return output
 
 
@@ -410,16 +416,18 @@ def send_edition(edition: str, now: datetime, items: list[dict],
             text_to_send = text
         try:
             if test_mode or not stage.get("photo_sent"):
-                telegram_api(token, "sendPhoto",
-                             {"chat_id": chat_id, "caption": caption}, poster)
+                photo_id = telegram_api(token, "sendPhoto",
+                                        {"chat_id": chat_id, "caption": caption}, poster)
                 if not test_mode:
-                    stage.update(photo_sent=True, report=text, stories=[i["id"] for i in items])
+                    stage.update(photo_sent=True, photo_message_id=photo_id,
+                                 report=text, stories=[i["id"] for i in items])
                     save_state(current, ledger_path)
-            telegram_api(token, "sendMessage",
-                         {"chat_id": chat_id, "text": text_to_send,
-                          "parse_mode": "HTML", "disable_web_page_preview": "true"})
+            text_id = telegram_api(token, "sendMessage",
+                                   {"chat_id": chat_id, "text": text_to_send,
+                                    "parse_mode": "HTML", "disable_web_page_preview": "true"})
             if not test_mode:
                 stage["text_sent"] = True
+                stage["text_message_id"] = text_id
                 save_state(current, ledger_path)
         except Exception as exc:
             errors += 1
@@ -450,11 +458,12 @@ def resume_pending(edition: str, now: datetime, ledger_path: Path,
         if not token:
             raise RuntimeError("Cannot resume visual delivery without Telegram token")
         try:
-            telegram_api(token, "sendMessage", {
+            text_id = telegram_api(token, "sendMessage", {
                 "chat_id": chat_id, "text": report,
                 "parse_mode": "HTML", "disable_web_page_preview": "true"
             })
             stage["text_sent"] = True
+            stage["text_message_id"] = text_id
             save_state(state, ledger_path)
         except Exception as exc:
             errors += 1
