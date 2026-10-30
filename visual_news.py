@@ -390,6 +390,9 @@ def send_edition(edition: str, now: datetime, items: list[dict],
     record = current["deliveries"].setdefault(slot, {"destinations": {}})
     text = full_caption(items, edition, now)
     caption = short_caption(items, edition, news_radar.report_timestamp(now))
+    if test_mode:
+        text = "🧪 <b>TEST ONLY · មិនមែនការផ្សាយព័ត៌មានពិត</b>\n" + text
+        caption = "🧪 TEST ONLY / សាកល្បង\n" + caption
     errors = 0
     for kind, chat_id in destinations.items():
         if not chat_id:
@@ -424,6 +427,41 @@ def send_edition(edition: str, now: datetime, items: list[dict],
     return 1 if errors else 0
 
 
+def resume_pending(edition: str, now: datetime, ledger_path: Path,
+                   destinations: dict[str, str]) -> int:
+    """Finish text after an acknowledged photo without fetching new headlines.
+
+    This only protects a *persisted* partial delivery. A runner crash between
+    Telegram acknowledgement and Git persistence is still ambiguous and must
+    be manually reconciled, never blindly replayed.
+    """
+    state = read_state(ledger_path)
+    slot = slot_for(edition, now)
+    stages = state["deliveries"].get(slot, {}).get("destinations", {})
+    errors = 0
+    for kind, chat_id in destinations.items():
+        stage = stages.get(kind, {})
+        if not (stage.get("photo_sent") and not stage.get("text_sent")):
+            continue
+        report = stage.get("report")
+        if not isinstance(report, str) or not report:
+            raise RuntimeError("Delivered photo has no matching report; manual review needed")
+        token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+        if not token:
+            raise RuntimeError("Cannot resume visual delivery without Telegram token")
+        try:
+            telegram_api(token, "sendMessage", {
+                "chat_id": chat_id, "text": report,
+                "parse_mode": "HTML", "disable_web_page_preview": "true"
+            })
+            stage["text_sent"] = True
+            save_state(state, ledger_path)
+        except Exception as exc:
+            errors += 1
+            logging.error("Could not resume %s Telegram text: %s", kind, type(exc).__name__)
+    return 1 if errors else 0
+
+
 def execute(edition: str, *, dry_run: bool, test_mode: bool,
             channel: str, private_chat: str, now: datetime | None = None,
             state_path: Path = STATE_FILE, output: Path = OUT) -> int:
@@ -432,12 +470,14 @@ def execute(edition: str, *, dry_run: bool, test_mode: bool,
     now = now or now_utc()
     slot = slot_for(edition, now)
     if not dry_run and not test_mode:
-        current = read_state(state_path)["deliveries"].get(slot, {}).get("destinations", {})
         intended = ({"channel": channel} if channel else {})
         if private_chat:
             intended["personal"] = private_chat
         if not intended:
             raise ValueError("No Telegram destination configured")
+        if resume_pending(edition, now, state_path, intended):
+            return 1
+        current = read_state(state_path)["deliveries"].get(slot, {}).get("destinations", {})
         if all(current.get(k, {}).get("text_sent") for k in intended):
             logging.info("Visual edition already delivered to all destinations in %s", slot)
             return 0
@@ -448,9 +488,16 @@ def execute(edition: str, *, dry_run: bool, test_mode: bool,
         logging.warning("No qualifying source-backed stories; skip poster and Telegram")
         return 0
     apply_khmer_translation(stories)
+    if (not dry_run and not test_mode and
+            os.getenv("VISUAL_REQUIRE_KHMER", "").lower() == "true" and
+            any(not contains_khmer(i["khmer_title"]) for i in stories)):
+        raise RuntimeError("Khmer translation unavailable: refuse English-only public poster")
     output.mkdir(parents=True, exist_ok=True)
     from visual_poster import render_poster
-    png = render_poster(edition, stories, news_radar.report_timestamp(now),
+    stamp = news_radar.report_timestamp(now)
+    if test_mode:
+        stamp = "DEMO / TEST · " + stamp
+    png = render_poster(edition, stories, stamp,
                         output / f"{edition}-latest.png")
     report = full_caption(stories, edition, now)
     (output / f"{edition}-latest.html").write_text(report + "\n", encoding="utf-8")
