@@ -209,6 +209,52 @@ class DeliveryTests(unittest.TestCase):
             self.assertFalse(self.state.exists())
             send.assert_not_called()
 
+    def test_resume_photo_only_without_recollecting_or_resending_photo(self):
+        slot = v.slot_for("tech", NOW)
+        v.save_state({"deliveries": {slot: {"destinations": {"channel": {
+            "photo_sent": True, "text_sent": False, "report": "original sourced report",
+        }}}}}, self.state)
+        with (patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "fake"}),
+              patch.object(v, "telegram_api", return_value=678) as api,
+              patch.object(v, "collect") as collect):
+            status = v.execute("tech", dry_run=False, test_mode=False,
+                               channel="@example", private_chat="", now=NOW,
+                               state_path=self.state, output=Path(self.tmp.name) / "out")
+            self.assertEqual(status, 0)
+            collect.assert_not_called()
+            self.assertEqual(api.call_count, 1)
+            self.assertEqual(api.call_args.args[1], "sendMessage")
+            self.assertEqual(api.call_args.args[2]["text"], "original sourced report")
+            self.assertTrue(v.read_state(self.state)["deliveries"][slot]
+                            ["destinations"]["channel"]["text_sent"])
+
+    def test_public_poster_requires_khmer_when_enabled(self):
+        with (patch.dict(os.environ, {"VISUAL_REQUIRE_KHMER": "true",
+                                      "TELEGRAM_BOT_TOKEN": "fake",
+                                      "OPENROUTER_API_KEY": ""}),
+              patch.object(v, "collect", return_value=(
+                  [self.item], {"eligible": 1, "working": ["GitHub"], "failed": []})),
+              patch.object(v, "send_edition") as send):
+            with self.assertRaisesRegex(RuntimeError, "Khmer translation unavailable"):
+                v.execute("tech", dry_run=False, test_mode=False,
+                          channel="@example", private_chat="", now=NOW,
+                          state_path=self.state, output=Path(self.tmp.name) / "out")
+            send.assert_not_called()
+
+    def test_private_test_labels_photo_and_full_report(self):
+        sent = []
+        def fake_send(token, endpoint, fields, image=None):
+            sent.append((endpoint, fields))
+            return 18
+        with (patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "fake"}),
+              patch.object(v, "telegram_api", side_effect=fake_send)):
+            self.assertEqual(v.send_edition("tech", NOW, [self.item], self.poster,
+                                            self.state, {"personal": "private1"},
+                                            test_mode=True), 0)
+        self.assertIn("TEST ONLY", sent[0][1]["caption"])
+        self.assertIn("TEST ONLY", sent[1][1]["text"])
+        self.assertFalse(self.state.exists())
+
     def test_invalid_state_fails_closed(self):
         self.state.write_text("[]")
         with self.assertRaises(ValueError):
