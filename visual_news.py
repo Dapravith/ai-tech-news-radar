@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from urllib.error import HTTPError
 from urllib.parse import quote_plus, urlparse
@@ -114,7 +115,7 @@ def normalize_story(raw: dict, edition: str, now: datetime) -> dict | None:
     if age > limit or age < timedelta(hours=-1):
         return None
     parsed_url = urlparse(url)
-    if parsed_url.username or parsed_url.password:
+    if parsed_url.scheme != "https" or parsed_url.username or parsed_url.password:
         return None
     host = (parsed_url.hostname or "").lower()
     indexed = source.startswith("Google News")
@@ -208,6 +209,17 @@ def khmer_fallback(item: dict) -> None:
     item["translation_status"] = "original_title"
 
 
+def extract_numbers(value: str) -> set[str]:
+    """Normalize Arabic and Khmer decimal digits before checking AI output."""
+    values = set()
+    for match in re.finditer(r"(?<![0-9\u17e0-\u17e9])[0-9\u17e0-\u17e9]+(?:[.,][0-9\u17e0-\u17e9]+)*(?![0-9\u17e0-\u17e9])", value):
+        normalized = []
+        for char in match.group():
+            normalized.append(char if char in ".," else str(unicodedata.decimal(char)))
+        values.add("".join(normalized))
+    return values
+
+
 def apply_khmer_translation(items: list[dict]) -> None:
     for item in items:
         khmer_fallback(item)
@@ -258,8 +270,8 @@ def apply_khmer_translation(items: list[dict]) -> None:
             if not contains_khmer(headline) or len(headline) < 5:
                 continue
             evidence = original["title"] + " " + original["excerpt"]
-            produced_numbers = set(re.findall(r"\d+(?:[.,]\d+)*", headline + " " + snippet))
-            sourced_numbers = set(re.findall(r"\d+(?:[.,]\d+)*", evidence))
+            produced_numbers = extract_numbers(headline + " " + snippet)
+            sourced_numbers = extract_numbers(evidence)
             if not produced_numbers.issubset(sourced_numbers):
                 logging.warning("Discarded translation with unsupported numeric claims")
                 continue
@@ -269,6 +281,19 @@ def apply_khmer_translation(items: list[dict]) -> None:
             original["translation_status"] = "model_translation_unreviewed"
     except Exception as exc:
         logging.warning("Khmer translation unavailable (%s); preserve original headline", type(exc).__name__)
+
+
+def scheduled_lateness_minutes(cron: str, now: datetime) -> int | None:
+    """Compute scheduler lag from a known UTC cron, not the daypart label."""
+    if cron not in SCHEDULE_TO_EDITION:
+        return None
+    fields = cron.split()
+    minute, hour = int(fields[0]), int(fields[1])
+    utc_now = now.astimezone(timezone.utc)
+    expected = utc_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if expected > utc_now:
+        expected -= timedelta(days=1)
+    return int((utc_now - expected).total_seconds() // 60)
 
 
 def slot_for(edition: str, now: datetime) -> str:
@@ -477,6 +502,15 @@ def execute(edition: str, *, dry_run: bool, test_mode: bool,
     if edition not in EDITIONS:
         raise ValueError("Unknown visual news edition")
     now = now or now_utc()
+    # GitHub schedules have run hours late. Do not publish an outdated slot.
+    if not dry_run and not test_mode:
+        cron = os.getenv("NEWS_SCHEDULE_CRON", "").strip()
+        if cron:
+            if SCHEDULE_TO_EDITION.get(cron) != edition:
+                raise RuntimeError("Scheduled cron does not match the requested news edition")
+            delay = scheduled_lateness_minutes(cron, now)
+            if delay is None or delay > 90:
+                raise RuntimeError(f"Visual news job is too late ({delay}m); do not publish stale edition")
     slot = slot_for(edition, now)
     if not dry_run and not test_mode:
         intended = ({"channel": channel} if channel else {})
@@ -496,6 +530,16 @@ def execute(edition: str, *, dry_run: bool, test_mode: bool,
     if not stories:
         logging.warning("No qualifying source-backed stories; skip poster and Telegram")
         return 0
+    # Preserve exactly the same article selection across recipients when
+    # a previous recipient already received this edition.
+    if not dry_run and not test_mode:
+        stages = read_state(state_path)["deliveries"].get(slot, {}).get("destinations", {})
+        selected_ids = [item["id"] for item in stories]
+        for stage in stages.values():
+            if stage.get("photo_sent") or stage.get("text_sent"):
+                original_ids = stage.get("stories")
+                if not isinstance(original_ids, list) or original_ids != selected_ids:
+                    raise RuntimeError("Visual story selection changed after partial delivery; reconcile manually")
     apply_khmer_translation(stories)
     if (not dry_run and not test_mode and
             os.getenv("VISUAL_REQUIRE_KHMER", "").lower() == "true" and
