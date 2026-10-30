@@ -1,2 +1,2 @@
 # Used only by the visual poster/Telegram publisher, not existing text-only jobs.
-Pillow==11.3.0
+Pillow==13.0.0
