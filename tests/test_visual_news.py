@@ -234,7 +234,7 @@ class DeliveryTests(unittest.TestCase):
         v.save_state({"deliveries": {slot: {"destinations": {"channel": {
             "photo_sent": True, "text_sent": False, "report": "original sourced report",
         }}}}}, self.state)
-        with (patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "fake"}),
+        with (patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "fake", "NEWS_SCHEDULE_CRON": ""}),
               patch.object(v, "telegram_api", return_value=678) as api,
               patch.object(v, "collect") as collect):
             status = v.execute("tech", dry_run=False, test_mode=False,
@@ -251,6 +251,7 @@ class DeliveryTests(unittest.TestCase):
     def test_public_poster_requires_khmer_when_enabled(self):
         with (patch.dict(os.environ, {"VISUAL_REQUIRE_KHMER": "true",
                                       "TELEGRAM_BOT_TOKEN": "fake",
+                                      "NEWS_SCHEDULE_CRON": "",
                                       "OPENROUTER_API_KEY": ""}),
               patch.object(v, "collect", return_value=(
                   [self.item], {"eligible": 1, "working": ["GitHub"], "failed": []})),
