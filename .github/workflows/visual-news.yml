@@ -81,7 +81,7 @@ jobs:
           sudo apt-get install -y fonts-noto-core
           python -m pip install -r requirements-visual.txt
       - name: Render ALL FOUR editions using clearly fictional offline fixtures
-        run: python scripts/visual_fixture_preview.py
+        run: python -m scripts.visual_fixture_preview
       - name: Validate PNG dimensions, font rendering, and file size
         run: |
           python - <<'PY'
