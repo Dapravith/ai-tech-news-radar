@@ -212,7 +212,7 @@ def khmer_fallback(item: dict) -> None:
 def extract_numbers(value: str) -> set[str]:
     """Normalize Arabic and Khmer decimal digits before checking AI output."""
     values = set()
-    for match in re.finditer(r"(?<!\w)[0-9\u17e0-\u17e9]+(?:[.,][0-9\u17e0-\u17e9]+)*(?!\w)", value):
+    for match in re.finditer(r"(?<![0-9\u17e0-\u17e9])[0-9\u17e0-\u17e9]+(?:[.,][0-9\u17e0-\u17e9]+)*(?![0-9\u17e0-\u17e9])", value):
         normalized = []
         for char in match.group():
             normalized.append(char if char in ".," else str(unicodedata.decimal(char)))
