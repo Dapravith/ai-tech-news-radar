@@ -17,7 +17,7 @@ in private tests and are never sufficient for public publication.
 ## Status
 
 Code is implemented in `visual_news.py`, `visual_poster.py`,
-`scripts/visual_fixture_preview.py`, `tests/test_visual_news.py`, and
+`visual_sources.py`, `tests/test_visual_news.py`, and
 `.github/workflows/visual-news.yml`. Production cron expressions are present,
 but BOTH `VISUAL_NEWS_ENABLED` and `VISUAL_PUBLICATION_REVIEWED` must explicitly equal `true` in GitHub Actions
 **repository variables**. The default is **off**. CI previews never use a
@@ -44,17 +44,17 @@ Different editions have separate state keys; Cambodia has distinct dayparts.
 
 ## Source controls
 
-- **Cambodia:** the existing bilingual Google News Cambodia feeds, with a
-  named-publisher allowlist (Cambodianess, CamboJA, Phnom Penh Post, Khmer
-  Times, Kiripost, selected Khmer publishers and appropriate international
-  outlets). Source type is labeled `indexed`, never direct.
-- **Global:** established direct BBC, Guardian and Deutsche Welle feeds plus
-  the existing reviewed Google News publisher list; reject unknown publishers.
+- **Cambodia:** only original publisher RSS feeds: Koh Santepheap and
+  Kampuchea Thmey (native Khmer), plus Khmer Times, CamboJA News,
+  Cambodianess, Phnom Penh Post and Kiripost. The visual editions never
+  accept Google News redirect links. Sources can be unavailable to CI and
+  are skipped when inaccessible.
+- **Global:** original BBC, Guardian, Deutsche Welle and CNA RSS feeds;
+  reject aggregator redirects and unapproved article domains.
 - **AI/software:** existing GitHub, Kubernetes, Python, Cloudflare, Spring,
   Google AI, OpenAI, Hugging Face and UK NCSC primary blog feeds.
-- **Gadget Friday:** MacRumors, GSMArena and Android Authority direct feeds,
-  supplemented by Google News results only when the original publisher is
-  actually identified as one of those three.
+- **Gadget Friday:** only original MacRumors, GSMArena and Android
+  Authority RSS feeds. No Google News results are accepted.
 - Direct publisher claims must have a normalized URL whose hostname matches
   the pinned expected publisher domain. Source publication date must be
   timezone-aware and fresh (36 hours daily, 8 days weekly); missing sources
@@ -65,8 +65,12 @@ Different editions have separate state keys; Cambodia has distinct dayparts.
 
 ## Khmer summarization and quality limits
 
-The optional `OPENROUTER_API_KEY` batches **faithful Khmer translation** of
-headlines and limited source excerpts (from direct feeds only). The response
+Native Khmer headlines and Khmer RSS excerpts are preserved as written by
+their original publishers. An optional `OPENROUTER_API_KEY` may be used
+for Khmer *editorial draft translation* only when
+`VISUAL_AI_TRANSLATION_DRAFT=true` is explicitly set. English-only source
+headlines otherwise remain attributed original English text; no AI-generated
+summary is invented. The response
 must reuse the original item ID, use Khmer script, and introduce **no new
 Arabic or Khmer numeric figures** (both scripts are normalized before comparison). The numeric check is partial; it is **not** complete
 semantic fact verification. When AI is unavailable, existing Khmer headlines
@@ -95,16 +99,17 @@ Run offline:
 python3 -m pip install -r requirements-visual.txt
 # Linux (Ubuntu/Debian): sudo apt-get install fonts-noto-core
 python3 -m unittest discover -s tests -v
-python3 -m scripts.visual_fixture_preview
+python3 -m scripts.check_visual_poster_qa
 python3 visual_news.py --edition cambodia --dry-run
 python3 visual_news.py --edition global --dry-run
 python3 visual_news.py --edition tech --dry-run
 python3 visual_news.py --edition gadget --dry-run
 ```
 
-All `demo-*` artifacts contain **DEMO** marks and fictional fixture
-headlines. Real-news PR previews are dry-run only and upload PNG/HTML artifacts
-when qualifying articles are found.
+The CI font test uses neutral typography strings only and never publishes
+them as news. Actual edition previews always fetch live original publisher RSS.
+Their PNG, report, and `<edition>-sources.json` audit are stored as
+short-lived Actions artifacts when qualifying articles are found.
 
 ## Activate safely
 
@@ -119,9 +124,11 @@ when qualifying articles are found.
 4. In Actions → **Khmer Visual News - Cambodia Global Tech Gadget**, select
    **Run workflow → edition=cambodia, dry_run=true**. This generates a preview
    but sends no message. Inspect the artifact.
-5. For an actual **private** test choose **dry_run=false,
-   test_private=true**. The poster and full report are labeled TEST, and
-   no state is recorded. Manual public posts are intentionally disallowed.
+5. For **private delivery of live publisher reports**, select
+   **dry_run=false, test_private=true**. This input remains for workflow
+   compatibility; the private poster is genuine recent original-publisher
+   RSS news, with no "TEST ONLY" or "DEMO" labels. It records no public
+   delivery state and cannot send to the public channel.
 6. Only after checking Khmer quality and source links, and adding exact article
    approvals, set Actions repository variables `VISUAL_NEWS_ENABLED=true` and
    `VISUAL_PUBLICATION_REVIEWED=true`. Set optional repository variable
