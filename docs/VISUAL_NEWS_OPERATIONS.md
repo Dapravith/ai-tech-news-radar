@@ -45,8 +45,9 @@ Different editions have separate state keys; Cambodia has distinct dayparts.
 ## Source controls
 
 - **Cambodia:** only original publisher RSS feeds: Koh Santepheap and
-  Kampuchea Thmey (native Khmer), plus Khmer Times, CamboJA News,
-  Cambodianess, Phnom Penh Post and Kiripost. The visual editions never
+  Kampuchea Thmey (native Khmer), plus CamboJA News (English). Khmer Times,
+  Cambodianess, Phnom Penh Post and Kiripost are disabled after direct RSS
+  failures in CI on 2026-10-31. The visual editions never
   accept Google News redirect links. Sources can be unavailable to CI and
   are skipped when inaccessible.
 - **Global:** original BBC, Guardian, Deutsche Welle and CNA RSS feeds;
