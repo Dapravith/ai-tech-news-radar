@@ -17,7 +17,7 @@ photo/poster editions only.**
 | Edition | Direct publishers and feed locations |
 | --- | --- |
 | Cambodia Khmer | Koh Santepheap: `https://kohsantepheapdaily.com.kh/feed/`; Kampuchea Thmey: `https://kampucheathmey.com/feed/` |
-| Cambodia English | Khmer Times: `https://www.khmertimeskh.com/feed/`; CamboJA News: `https://cambojanews.com/feed/`; Cambodianess: `https://www.cambodianess.com/feed/`; Phnom Penh Post: `https://phnompenhpost.com/feed/`; Kiripost: `https://kiripost.com/feed` |
+| Cambodia English (active) | CamboJA News: `https://cambojanews.com/feed/` |
 | Global | Existing BBC, Guardian and DW **direct feeds**, and CNA World: `https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml&category=6311` |
 | AI & Software | Existing official OpenAI, GitHub, Kubernetes, Spring, Cloudflare, Google AI, Python, Hugging Face and NCSC feeds |
 | Gadget Friday | Original MacRumors, GSMArena and Android Authority RSS feeds; no Google News index |
