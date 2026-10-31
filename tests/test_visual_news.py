@@ -85,6 +85,21 @@ class StoryTrustTests(unittest.TestCase):
         for edition in v.EDITIONS:
             self.assertTrue(all("news.google.com" not in url for _, url in v.feeds_for(edition)))
 
+    def test_cambodia_excludes_khmer_publisher_global_section(self):
+        international = dict(story(), source="Kampuchea Thmey",
+                             title="ព័ត៌មានអន្តរជាតិអំពីពិភពលោក",
+                             url="https://www.kampucheathmey.com/global-news/1207269")
+        self.assertIsNone(v.normalize_story(international, "cambodia", NOW))
+        local = dict(international, url="https://www.kampucheathmey.com/local-news/1207341")
+        self.assertIsNotNone(v.normalize_story(local, "cambodia", NOW))
+
+    def test_khmer_rss_excerpt_removes_wordpress_footer_and_incomplete_sentence(self):
+        source = ("ក្រសួងបានចេញសេចក្ដីប្រកាសថ្មីអំពីសេដ្ឋកិច្ចកម្ពុជា។ "
+                  "The post ឈ្មោះអត្ថបទនេះ appeared first on publisher.")
+        self.assertEqual(v.rss_excerpt(source), "ក្រសួងបានចេញសេចក្ដីប្រកាសថ្មីអំពីសេដ្ឋកិច្ចកម្ពុជា។")
+        long_source = "ព័ត៌មាន" * 100
+        self.assertEqual(v.rss_excerpt(long_source, limit=120), "")
+
     def test_cambodia_selection_prefers_native_khmer_original_headlines(self):
         english = dict(story("GitHub Blog", "Cambodia report", 0), source="Khmer Times",
                        url="https://www.khmertimeskh.com/article/english")
@@ -117,6 +132,19 @@ class StoryTrustTests(unittest.TestCase):
 
 
 class TranslationTests(unittest.TestCase):
+    def test_native_khmer_rss_excerpt_is_kept_without_model(self):
+        item = v.normalize_story(dict(story(),
+            source="Kampuchea Thmey",
+            title="ក្រសួងប្រកាសព័ត៌មានសំខាន់ថ្មី",
+            url="https://kampucheathmey.com/local-news/story",
+            summary="ក្រសួងបានប្រកាសអំពីគោលនយោបាយថ្មីសម្រាប់ប្រជាពលរដ្ឋ។"
+        ), "cambodia", NOW)
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": ""}):
+            v.khmer_fallback(item)
+        self.assertEqual(item["khmer_summary"],
+                         "ក្រសួងបានប្រកាសអំពីគោលនយោបាយថ្មីសម្រាប់ប្រជាពលរដ្ឋ។")
+        self.assertEqual(item["translation_status"], "original_khmer_rss")
+
     def test_fallback_does_not_invent_details(self):
         item = v.normalize_story(story(), "tech", NOW)
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": ""}):
