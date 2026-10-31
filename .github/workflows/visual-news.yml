@@ -29,8 +29,12 @@ on:
     paths:
       - 'visual_news.py'
       - 'visual_poster.py'
+      - 'visual_quality.py'
+      - 'config/visual_editorial_approvals.json'
       - 'requirements-visual.txt'
       - 'scripts/visual_fixture_preview.py'
+      - 'scripts/check_visual_poster_qa.py'
+      - 'tests/test_visual_quality.py'
       - 'tests/test_visual_news.py'
       - '.github/workflows/visual-news.yml'
   push:
@@ -38,8 +42,12 @@ on:
     paths:
       - 'visual_news.py'
       - 'visual_poster.py'
+      - 'visual_quality.py'
+      - 'config/visual_editorial_approvals.json'
       - 'requirements-visual.txt'
       - 'scripts/visual_fixture_preview.py'
+      - 'scripts/check_visual_poster_qa.py'
+      - 'tests/test_visual_quality.py'
       - 'tests/test_visual_news.py'
       - '.github/workflows/visual-news.yml'
 
