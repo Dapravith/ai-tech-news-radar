@@ -102,12 +102,12 @@ class StoryTrustTests(unittest.TestCase):
         self.assertEqual(v.rss_excerpt(long_source, limit=120), "")
 
     def test_cambodia_selection_prefers_native_khmer_original_headlines(self):
-        english = dict(story("GitHub Blog", "Cambodia report", 0), source="Khmer Times",
-                       url="https://www.khmertimeskh.com/article/english")
+        english = dict(story("GitHub Blog", "Cambodia report", 0), source="CamboJA News",
+                       url="https://cambojanews.com/article/english")
         khmer = dict(story("GitHub Blog", "សេចក្ដីជូនដំណឹងថ្មីអំពីកម្ពុជា", 8),
                      source="Kampuchea Thmey", url="https://kampucheathmey.com/news/khmer")
         with (patch.object(v, "feeds_for", return_value=[
-                    ("Khmer Times", "https://www.khmertimeskh.com/feed/"),
+                    ("CamboJA News", "https://cambojanews.com/feed/"),
                     ("Kampuchea Thmey", "https://kampucheathmey.com/feed/")]),
               patch.object(v.news_radar, "fetch_feed", side_effect=[[english], [khmer]])):
             selected, _ = v.collect("cambodia", NOW, limit=2)
