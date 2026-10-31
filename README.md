@@ -34,7 +34,7 @@ someone else's poster or branding, and keeps all existing text-news publishers.
 
 The dedicated [GitHub Actions visual workflow](.github/workflows/visual-news.yml)
 contains these schedules but **will not publish automatically until**
-repository Actions variable `VISUAL_NEWS_ENABLED=true` is explicitly configured.
+repository Actions variables `VISUAL_NEWS_ENABLED=true` AND `VISUAL_PUBLICATION_REVIEWED=true` are explicitly configured, **and every story has exact human editorial approval** in `config/visual_editorial_approvals.json`.
 Use manual **dry-run previews first**, then a clearly marked **private test**;
 manual public posting is intentionally blocked. Existing public text news
 continues unchanged.
@@ -46,7 +46,7 @@ publisher, source link, and distinguishes `Google News indexed` from an
 original article. No generic `✅ verified` badge is produced. An RSS headline
 alone is insufficient to assert detailed product specifications or prices.
 
-Read [visual operations, configuration, failure recovery and editorial
+Read [mandatory Khmer poster editorial QA and missing-glyph prevention](docs/VISUAL_POSTER_EDITORIAL_QA.md).\n\nRead [visual operations, configuration, failure recovery and editorial
 limitations](docs/VISUAL_NEWS_OPERATIONS.md). Poster demos and live
 non-publishing previews are uploaded as PR workflow artifacts.
 

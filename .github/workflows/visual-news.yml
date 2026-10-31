@@ -110,7 +110,9 @@ jobs:
       - uses: actions/upload-artifact@v6
         with:
           name: khmer-news-poster-demos
-          path: out/visual/demo-*
+          path: |
+            out/visual/demo-*
+            out/visual/qa-mixed-script.png
           retention-days: 7
           if-no-files-found: error
 
@@ -137,7 +139,13 @@ jobs:
           sudo apt-get install -y fonts-noto-core
           python -m pip install -r requirements-visual.txt
       - name: Fetch CURRENT RSS metadata and render without any Telegram credentials
+        id: rss
+        continue-on-error: true   # External feed availability is a separate canary, not a glyph QA gate.
         run: python visual_news.py --edition ${{ matrix.edition }} --dry-run
+      - name: Report external source outage without hiding quality results
+        if: steps.rss.outcome == 'failure'
+        run: |
+          echo "::warning::Live ${{ matrix.edition }} RSS preview unavailable. The producer correctly refuses to publish without current source data. Inspect the failed step before production activation."
       - uses: actions/upload-artifact@v6
         if: always()
         with:
