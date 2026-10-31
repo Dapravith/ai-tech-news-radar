@@ -12,27 +12,27 @@ on:
   workflow_dispatch:
     inputs:
       edition:
-        description: 'Edition for preview or private Telegram test'
+        description: 'Edition for LIVE original-publisher RSS news'
         type: choice
         required: true
         options: [cambodia, global, tech, gadget]
         default: cambodia
       dry_run:
-        description: 'Dry run: do not send Telegram'
+        description: 'Collect live RSS and generate poster; no Telegram send'
         type: boolean
         default: true
       test_private:
-        description: 'Send clearly labeled TEST poster only to private chat'
+        description: 'Deliver LIVE original-publisher news only to private chat'
         type: boolean
         default: false
   pull_request:
     paths:
       - 'visual_news.py'
+      - 'visual_sources.py'
       - 'visual_poster.py'
       - 'visual_quality.py'
       - 'config/visual_editorial_approvals.json'
       - 'requirements-visual.txt'
-      - 'scripts/visual_fixture_preview.py'
       - 'scripts/check_visual_poster_qa.py'
       - 'tests/test_visual_quality.py'
       - 'tests/test_visual_news.py'
@@ -41,11 +41,11 @@ on:
     branches: [main]
     paths:
       - 'visual_news.py'
+      - 'visual_sources.py'
       - 'visual_poster.py'
       - 'visual_quality.py'
       - 'config/visual_editorial_approvals.json'
       - 'requirements-visual.txt'
-      - 'scripts/visual_fixture_preview.py'
       - 'scripts/check_visual_poster_qa.py'
       - 'tests/test_visual_quality.py'
       - 'tests/test_visual_news.py'
@@ -88,31 +88,25 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y fonts-noto-core
           python -m pip install -r requirements-visual.txt
-      - name: Render ALL FOUR editions using clearly fictional offline fixtures
-        run: python -m scripts.visual_fixture_preview
       - name: Validate glyph coverage and mixed Khmer/English rendering
         run: python -m scripts.check_visual_poster_qa
-      - name: Validate PNG dimensions, font rendering, and file size
+      - name: Validate font QA rendering dimensions and size (not news content)
         run: |
           python - <<'PY'
           from pathlib import Path
           from PIL import Image
-          editions = ("cambodia", "global", "tech", "gadget")
-          for name in editions:
-              path = Path("out/visual") / f"demo-{name}.png"
-              with Image.open(path) as picture:
-                  picture.verify()
-              with Image.open(path) as picture:
-                  assert picture.size == (1080, 1350)
-              assert 10_000 < path.stat().st_size < 9_000_000
-              print(f"Verified poster: {name}")
+          path = Path("out/visual/qa-mixed-script.png")
+          with Image.open(path) as picture:
+              picture.verify()
+          with Image.open(path) as picture:
+              assert picture.size == (1080, 1350)
+          assert 10_000 < path.stat().st_size < 9_000_000
+          print("Font render verification passed; live news comes from original RSS.")
           PY
       - uses: actions/upload-artifact@v6
         with:
-          name: khmer-news-poster-demos
-          path: |
-            out/visual/demo-*
-            out/visual/qa-mixed-script.png
+          name: visual-font-rendering-qa
+          path: out/visual/qa-mixed-script.png
           retention-days: 7
           if-no-files-found: error
 
@@ -138,7 +132,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y fonts-noto-core
           python -m pip install -r requirements-visual.txt
-      - name: Fetch CURRENT RSS metadata and render without any Telegram credentials
+      - name: Fetch CURRENT ORIGINAL PUBLISHER RSS and render without Telegram credentials
         id: rss
         continue-on-error: true   # External feed availability is a separate canary, not a glyph QA gate.
         run: python visual_news.py --edition ${{ matrix.edition }} --dry-run
@@ -153,6 +147,7 @@ jobs:
           path: |
             out/visual/${{ matrix.edition }}-latest.*
             out/visual/${{ matrix.edition }}-review-request.json
+            out/visual/${{ matrix.edition }}-sources.json
           retention-days: 3
           if-no-files-found: ignore
 
@@ -213,7 +208,7 @@ jobs:
               echo "dry=false" >> "$GITHUB_OUTPUT"
               echo "private_only=true" >> "$GITHUB_OUTPUT"
             else
-              echo "::error::Manual publishing must be a dry-run or a private test."
+              echo "::error::Manual publishing must be a non-sending live RSS preview or private-only original RSS delivery."
               exit 1
             fi
           fi
