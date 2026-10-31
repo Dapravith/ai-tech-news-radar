@@ -8,6 +8,10 @@ Article links must match the original publisher domain in visual_news.py.
 from __future__ import annotations
 
 CAMBODIA_FEEDS = {
+    # Two original Khmer-language publishers' feeds, listed by Feedspot 2026.
+    # Native Khmer source headlines are preferred to unreviewed translations.
+    "Koh Santepheap": "https://kohsantepheapdaily.com.kh/feed/",
+    "Kampuchea Thmey": "https://kampucheathmey.com/feed/",
     # Feed URL verified by public RSS discovery service (2026-10-31).
     "Khmer Times": "https://www.khmertimeskh.com/feed/",
     # Publisher-owned endpoints checked by CI; failures are surfaced as outages.
