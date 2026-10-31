@@ -28,8 +28,9 @@ Khmer grammar, or source-bound editorial approval.
    - `<edition>-latest.html`: source-linked report
    - `<edition>-review-request.json`: **proposed** Khmer text and precise source
      identifiers. This is *not* an approval.
-4. Verify each article at its original publisher. For Google News indexed links,
-   verify the original publication separately and retain the indexed attribution.
+4. Verify each article at the original publisher's direct URL. All visual
+   source links must match its approved reporting outlet's domain, never an
+   aggregator, syndication mirror, or Google News redirect.
    Verify dates, people, geography, quote/context, money amounts and whether the
    article is reporting, analysis or rumor. Do **not** apply a generic
    `✅ បានបញ្ជាក់` badge.
@@ -42,8 +43,9 @@ Khmer grammar, or source-bound editorial approval.
    Each slot records `reviewed_by`, timezone-aware `reviewed_at` and the
    **exact ordered story IDs, URLs, source headlines, publication timestamps,
    final Khmer headlines and final Khmer summaries**.
-7. Preview the poster again, read the Telegram private TEST caption and verify
-   it looks right on both Android/iOS. The private test is always labeled TEST.
+7. Preview the poster again, read the private Telegram live news caption and
+   verify it looks right on Android/iOS. Private delivery uses actual original
+   publisher RSS stories and has no artificial demo or test-only headline.
 8. Set Actions repository variable `VISUAL_PUBLICATION_REVIEWED=true` only
    after this process works reliably. The per-story manifest gate still blocks
    every new, unreviewed set and any changes to a previously approved source.
@@ -95,7 +97,7 @@ python3 -m unittest discover -s tests -v
 sudo apt-get install fonts-noto-core
 python3 -m pip install -r requirements-visual.txt
 python3 -m scripts.check_visual_poster_qa
-python3 -m scripts.visual_fixture_preview
+python3 -m scripts.check_visual_poster_qa
 python3 visual_news.py --edition cambodia --dry-run
 ```
 
