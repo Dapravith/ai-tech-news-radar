@@ -142,6 +142,7 @@ def normalize_story(raw: dict, edition: str, now: datetime) -> dict | None:
         "id": digest_id, "title": title, "url": url, "publisher": publisher,
         "published": published, "source_kind": evidence, "edition": edition,
         "excerpt": excerpt, "status": "reported",
+        "source_language": "km" if contains_khmer(title) else "en",
     }
 
 
