@@ -13,7 +13,7 @@ from visual_quality import normalize_visual_text
 
 
 def main() -> int:
-    mixed = "Apple MacBook Pro OLED និង Samsung W27"
+    mixed = "ព័ត៌មាន Apple MacBook Pro OLED និង Samsung W27"
     verify_glyph_coverage(mixed)
     assert normalize_visual_text(mixed, require_khmer=True) == mixed
     assert graphemes("ក្ខ") == ["ក្ខ"], "Khmer coeng/subscript must stay together"
