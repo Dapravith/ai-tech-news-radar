@@ -17,38 +17,43 @@ All times below are **Cambodia ICT (UTC+7)**.
 
 The schedules are **best effort**. GitHub Actions may delay or occasionally skip cron jobs, even for public repositories; these are not precise or guaranteed execution times. Backup runs reduce the risk of missed daily delivery, but cannot guarantee exactly 08:00 or 09:00. Run history and real Telegram delivery should both be monitored.
 
-## Khmer visual news posters — photo + caption (opt-in)
+## Khmer visual news posters — original publisher RSS (opt-in)
 
-The new [visual publisher](visual_news.py) creates **1080×1350 PNG posters**
-using [Pillow](requirements-visual.txt) and an installed Khmer font with text
-shaping. Telegram receives a short photo caption plus a separate source-linked
-Khmer report. It reuses existing feeds, does not scrape Facebook or copy
-someone else's poster or branding, and keeps all existing text-news publishers.
+The [visual news publisher](visual_news.py) creates **1080×1350 PNG posters**
+and a full source-linked Telegram report from **LIVE original publisher RSS
+feeds**. Google News redirects, synthetic headlines and fictional demo stories
+are **not accepted** in visual editions. Every selected story retains its
+original publisher, article URL, feed URL and publication timestamp.
 
-| Edition | Planned Cambodia publication | Original/source channels |
+| Edition | Planned Cambodia publication | Direct original RSS sources |
 | --- | --- | --- |
-| 🇰🇭 Cambodia visual | 09:05, 13:05, 19:05 daily | Reviewed Cambodia outlets from Google News (labeled indexed) |
-| 🌍 Global visual | 10:25 daily | BBC, Guardian, Deutsche Welle, reviewed publishers |
-| 💻 AI & software visual | 16:25 daily | Official blogs from OpenAI, Google, GitHub, Kubernetes, Python, Cloudflare, Spring, etc. |
-| 📱 Gadget Friday | Friday 17:15 | Direct MacRumors, Android Authority, GSMArena feeds and attributed indexed articles |
+| 🇰🇭 Cambodia visual | 09:05, 13:05, 19:05 daily | Khmer: Koh Santepheap, Kampuchea Thmey. English: Khmer Times, CamboJA News, Cambodianess, Phnom Penh Post, Kiripost |
+| 🌍 Global visual | 10:25 daily | BBC, Guardian, DW, CNA |
+| 💻 AI & Software visual | 16:25 daily | Official OpenAI, GitHub, Kubernetes, Google AI, Cloudflare, Spring, Python, Hugging Face, NCSC feeds |
+| 📱 Gadget Friday | Friday 17:15 | MacRumors, Android Authority, GSMArena |
 
-The dedicated [GitHub Actions visual workflow](.github/workflows/visual-news.yml)
-contains these schedules but **will not publish automatically until**
-repository Actions variables `VISUAL_NEWS_ENABLED=true` AND `VISUAL_PUBLICATION_REVIEWED=true` are explicitly configured, **and every story has exact human editorial approval** in `config/visual_editorial_approvals.json`.
-Use manual **dry-run previews first**, then a clearly marked **private test**;
-manual public posting is intentionally blocked. Existing public text news
-continues unchanged.
+The [visual publishing workflow](.github/workflows/visual-news.yml) has a
+private-only live RSS delivery option: `dry_run=false`, `test_private=true`.
+That input name is retained for compatibility; it **sends real source-backed
+news** to your private Telegram chat without artificial “TEST ONLY” or “DEMO”
+labels. For no-send review, use `dry_run=true` and inspect the poster and
+`<edition>-sources.json` artifact. The font-only CI job is not a news feed.
 
-Headlines are translated into Khmer only when the optional model can translate
-them without introducing unsupported figures. In public production mode the
-visual workflow refuses an English-only poster. The caption preserves original
-publisher, source link, and distinguishes `Google News indexed` from an
-original article. No generic `✅ verified` badge is produced. An RSS headline
-alone is insufficient to assert detailed product specifications or prices.
+Public visual publishing remains **off** unless both repository Actions
+variables `VISUAL_NEWS_ENABLED=true` and
+`VISUAL_PUBLICATION_REVIEWED=true` are configured **and** all headlines
+and summaries have human review bound to their exact source articles in
+`config/visual_editorial_approvals.json`.
 
-Read [mandatory Khmer poster editorial QA and missing-glyph prevention](docs/VISUAL_POSTER_EDITORIAL_QA.md).\n\nRead [visual operations, configuration, failure recovery and editorial
-limitations](docs/VISUAL_NEWS_OPERATIONS.md). Poster demos and live
-non-publishing previews are uploaded as PR workflow artifacts.
+Native Khmer source headlines and publisher-provided Khmer RSS excerpts are
+preferred. Optional AI translation produces only an editorial draft when
+`VISUAL_AI_TRANSLATION_DRAFT=true`, not a fabricated or automatically approved
+report. External RSS outages are visible in workflow logs; **no fabricated
+replacement stories** are sent.
+
+Read [direct RSS sources and real-news validation](docs/VISUAL_LIVE_RSS.md),
+[Khmer poster editorial and typography QA](docs/VISUAL_POSTER_EDITORIAL_QA.md),
+and [visual workflow operations](docs/VISUAL_NEWS_OPERATIONS.md).
 
 ## Trusted sources and news quality
 
