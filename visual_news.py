@@ -172,6 +172,7 @@ def collect(edition: str, now: datetime, *, limit: int = 3) -> tuple[list[dict],
             for raw in items:
                 story = normalize_story(raw, edition, now)
                 if story:
+                    story["feed_url"] = url
                     seen.append(story)
         except Exception as exc:
             errors.append(name)
@@ -207,8 +208,17 @@ def contains_khmer(value: str) -> bool:
 
 
 def khmer_fallback(item: dict) -> None:
-    # Do not fabricate a summary when only a headline was retrieved.
+    # Never invent a summary. When the original publisher's RSS excerpt is
+    # already Khmer, display that exact attributed source excerpt instead.
     item["khmer_title"] = item["title"]
+    excerpt = item.get("excerpt", "")
+    if contains_khmer(item["title"]) and contains_khmer(excerpt):
+        try:
+            item["khmer_summary"] = normalize_visual_text(excerpt, max_length=280)
+            item["translation_status"] = "original_khmer_rss"
+            return
+        except ValueError:
+            pass
     item["khmer_summary"] = (
         f"សារព័ត៌មាន {item['publisher']} បានរាយការណ៍អំពីដំណឹងនេះ។ "
         "សូមអានអត្ថបទដើមសម្រាប់ព័ត៌មានលម្អិត។"
@@ -570,7 +580,13 @@ def execute(edition: str, *, dry_run: bool, test_mode: bool,
         # Any changed headline, source URL, article date or selection blocks sending.
         apply_approved_copy(stories, approval)
     else:
-        apply_khmer_translation(stories)
+        # Source-only output by default. AI translation may be generated as an
+        # explicitly requested *draft*, never mistaken for original reporting.
+        if os.getenv("VISUAL_AI_TRANSLATION_DRAFT", "").lower() == "true":
+            apply_khmer_translation(stories)
+        else:
+            for item in stories:
+                khmer_fallback(item)
     if (not dry_run and not test_mode and
             os.getenv("VISUAL_REQUIRE_KHMER", "").lower() == "true" and
             any(not contains_khmer(i["khmer_title"]) for i in stories)):
@@ -582,6 +598,23 @@ def execute(edition: str, *, dry_run: bool, test_mode: bool,
                         output / f"{edition}-latest.png")
     report = full_caption(stories, edition, now)
     (output / f"{edition}-latest.html").write_text(report + "\n", encoding="utf-8")
+    # Real source receipt: no fixture headlines, no inferred facts or redirects.
+    receipt = {
+        "edition": edition, "collected_at": now.isoformat(),
+        "policy": "original_publisher_rss_only",
+        "stories": [{
+            "publisher": item["publisher"], "original_title": item["title"],
+            "original_article_url": item["url"],
+            "publisher_feed_url": item.get("feed_url"),
+            "published_at": item["published"].isoformat(),
+            "source_kind": item["source_kind"],
+            "language": item["source_language"],
+        } for item in stories],
+    }
+    (output / f"{edition}-sources.json").write_text(
+        json.dumps(receipt, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8"
+    )
     if dry_run or test_mode:
         request = review_request(edition, slot, stories)
         (output / f"{edition}-review-request.json").write_text(
