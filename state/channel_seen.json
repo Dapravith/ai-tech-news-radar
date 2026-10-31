@@ -76,6 +76,10 @@
       "ids": [
         "54ba2c15d2cfc51e05b729"
       ]
+    },
+    "2026-10-31": {
+      "delivered": true,
+      "ids": []
     }
   },
   "software": {
@@ -177,6 +181,10 @@
       ]
     },
     "2026-10-30": {
+      "delivered": true,
+      "ids": []
+    },
+    "2026-10-31": {
       "delivered": true,
       "ids": []
     }
