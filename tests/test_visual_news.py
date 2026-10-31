@@ -78,7 +78,8 @@ class StoryTrustTests(unittest.TestCase):
 
     def test_edition_feed_lists_are_separate(self):
         self.assertTrue(any("Koh Santepheap" in x[0] for x in v.feeds_for("cambodia")))
-        self.assertTrue(any("Khmer Times" in x[0] for x in v.feeds_for("cambodia")))
+        self.assertTrue(any("CamboJA News" in x[0] for x in v.feeds_for("cambodia")))
+        self.assertEqual(len(v.feeds_for("cambodia")), 3)
         self.assertTrue(any("CNA World" in x[0] for x in v.feeds_for("global")))
         self.assertTrue(any("GitHub Blog" in x[0] for x in v.feeds_for("tech")))
         self.assertTrue(any("MacRumors" in x[0] for x in v.feeds_for("gadget")))
