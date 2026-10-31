@@ -108,6 +108,12 @@ def is_approved_domain(host: str, domains: tuple[str, ...]) -> bool:
 def normalize_story(raw: dict, edition: str, now: datetime) -> dict | None:
     """Publisher identity + domain + timezone + freshness checks, not fact-checking."""
     title = clean(str(raw.get("title", "")), 170)
+    try:
+        # Skip original headlines that cannot be faithfully drawn as a Khmer/
+        # English text-only poster (e.g. unsupported symbols/scripts).
+        normalize_visual_text(title, max_length=170)
+    except ValueError:
+        return None
     url = news_radar.normalize_url(str(raw.get("url", "")))
     published = raw.get("published")
     source = str(raw.get("source", "")).strip()
@@ -271,6 +277,13 @@ def apply_khmer_translation(items: list[dict]) -> None:
             headline = clean(str(translated.get("title_km", "")), 160)
             snippet = clean(str(translated.get("summary_km", "")), 210)
             if not contains_khmer(headline) or len(headline) < 5:
+                continue
+            try:
+                headline = normalize_visual_text(headline, require_khmer=True, max_length=160)
+                if snippet:
+                    snippet = normalize_visual_text(snippet, max_length=210)
+            except ValueError:
+                logging.warning("Discarded Khmer translation with invalid or unsupported characters")
                 continue
             evidence = original["title"] + " " + original["excerpt"]
             produced_numbers = extract_numbers(headline + " " + snippet)
