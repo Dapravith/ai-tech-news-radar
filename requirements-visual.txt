@@ -1,3 +1,3 @@
 # Used only by the visual poster/Telegram publisher, not existing text-only jobs.
 Pillow==13.0.0
-fonttools==4.59.2
+fonttools==4.60.2
