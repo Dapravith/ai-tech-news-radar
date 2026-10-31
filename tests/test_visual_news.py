@@ -45,18 +45,24 @@ class StoryTrustTests(unittest.TestCase):
             with self.subTest(url=url):
                 self.assertIsNone(v.normalize_story(dict(story(), url=url), "tech", NOW))
 
-    def test_google_index_requires_named_reviewed_publisher(self):
-        raw = dict(story(), source="Google News Cambodia English",
-                   publisher="Cambodianess",
-                   title="Cambodia development update",
-                   url="https://news.google.com/rss/articles/abc")
-        selected = v.normalize_story(raw, "cambodia", NOW)
-        self.assertEqual(selected["publisher"], "Cambodianess")
-        self.assertEqual(selected["source_kind"], "indexed")
-        self.assertEqual(selected["excerpt"], "")
-        self.assertEqual(selected["status"], "reported")
-        self.assertIsNone(v.normalize_story(dict(raw, publisher="Unknown Trending Viral"), "cambodia", NOW))
-        self.assertIsNone(v.normalize_story(dict(raw, url="https://danger.example/rss/articles/abc"), "cambodia", NOW))
+    def test_google_index_is_not_an_original_source(self):
+        indexed = dict(story(), source="Google News Cambodia English",
+                       publisher="Khmer Times", title="Cambodia development update",
+                       url="https://news.google.com/rss/articles/abc")
+        self.assertIsNone(v.normalize_story(indexed, "cambodia", NOW))
+        self.assertIsNone(v.normalize_story(dict(indexed, source="Khmer Times"), "cambodia", NOW))
+
+    def test_only_real_cambodia_publisher_article_domains_are_eligible(self):
+        native = dict(story(), source="Koh Santepheap",
+                      title="ក្រសួងប្រកាសព័ត៌មានថ្មី",
+                      url="https://kohsantepheapdaily.com.kh/article/123")
+        selected = v.normalize_story(native, "cambodia", NOW)
+        self.assertEqual(selected["source_kind"], "direct")
+        self.assertEqual(selected["publisher"], "Koh Santepheap")
+        self.assertEqual(selected["source_language"], "km")
+        self.assertEqual(selected["url"], native["url"])
+        self.assertIsNone(v.normalize_story(dict(native, url="https://news.google.com/rss/articles/abc"), "cambodia", NOW))
+        self.assertIsNone(v.normalize_story(dict(native, url="https://fake.kohsantepheapdaily.com.kh.evil.example/article"), "cambodia", NOW))
 
     def test_gadget_rejects_other_publishers_and_expired_stories(self):
         valid = v.normalize_story(story("MacRumors", "New Mac display rumors", offset=35),
@@ -71,10 +77,28 @@ class StoryTrustTests(unittest.TestCase):
         self.assertIsNone(v.normalize_story(dict(story(), published=None), "tech", NOW))
 
     def test_edition_feed_lists_are_separate(self):
-        self.assertTrue(any("Google News Cambodia" in x[0] for x in v.feeds_for("cambodia")))
-        self.assertTrue(any("BBC World" in x[0] for x in v.feeds_for("global")))
+        self.assertTrue(any("Koh Santepheap" in x[0] for x in v.feeds_for("cambodia")))
+        self.assertTrue(any("Khmer Times" in x[0] for x in v.feeds_for("cambodia")))
+        self.assertTrue(any("CNA World" in x[0] for x in v.feeds_for("global")))
         self.assertTrue(any("GitHub Blog" in x[0] for x in v.feeds_for("tech")))
         self.assertTrue(any("MacRumors" in x[0] for x in v.feeds_for("gadget")))
+        for edition in v.EDITIONS:
+            self.assertTrue(all("news.google.com" not in url for _, url in v.feeds_for(edition)))
+
+    def test_cambodia_selection_prefers_native_khmer_original_headlines(self):
+        english = dict(story("GitHub Blog", "Cambodia report", 0), source="Khmer Times",
+                       url="https://www.khmertimeskh.com/article/english")
+        khmer = dict(story("GitHub Blog", "សេចក្ដីជូនដំណឹងថ្មីអំពីកម្ពុជា", 8),
+                     source="Kampuchea Thmey", url="https://kampucheathmey.com/news/khmer")
+        with (patch.object(v, "feeds_for", return_value=[
+                    ("Khmer Times", "https://www.khmertimeskh.com/feed/"),
+                    ("Kampuchea Thmey", "https://kampucheathmey.com/feed/")]),
+              patch.object(v.news_radar, "fetch_feed", side_effect=[[english], [khmer]])):
+            selected, _ = v.collect("cambodia", NOW, limit=2)
+        self.assertEqual(len(selected), 2)
+        self.assertEqual(selected[0]["source_language"], "km")
+        self.assertEqual(selected[0]["source_kind"], "direct")
+        self.assertIn("kampucheathmey.com", selected[0]["url"])
 
     def test_collect_partial_feed_failure_no_fabrication(self):
         with (patch.object(v, "feeds_for", return_value=[
@@ -299,7 +323,7 @@ class DeliveryTests(unittest.TestCase):
                           state_path=self.state, output=Path(self.tmp.name) / "out")
             send.assert_not_called()
 
-    def test_private_test_labels_photo_and_full_report(self):
+    def test_private_preview_uses_live_publisher_copy_without_test_only_branding(self):
         sent = []
         def fake_send(token, endpoint, fields, image=None):
             sent.append((endpoint, fields))
@@ -309,8 +333,12 @@ class DeliveryTests(unittest.TestCase):
             self.assertEqual(v.send_edition("tech", NOW, [self.item], self.poster,
                                             self.state, {"personal": "private1"},
                                             test_mode=True), 0)
-        self.assertIn("TEST ONLY", sent[0][1]["caption"])
-        self.assertIn("TEST ONLY", sent[1][1]["text"])
+        self.assertEqual([x[0] for x in sent], ["sendPhoto", "sendMessage"])
+        for _, fields in sent:
+            self.assertNotIn("TEST ONLY", " ".join(fields.values()))
+            self.assertNotIn("DEMO", " ".join(fields.values()))
+        self.assertIn("GitHub Blog", sent[0][1]["caption"])
+        self.assertIn("github.blog", sent[1][1]["text"])
         self.assertFalse(self.state.exists())
 
     def test_invalid_state_fails_closed(self):
