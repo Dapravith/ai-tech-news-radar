@@ -82,6 +82,8 @@ jobs:
           python -m pip install -r requirements-visual.txt
       - name: Render ALL FOUR editions using clearly fictional offline fixtures
         run: python -m scripts.visual_fixture_preview
+      - name: Validate glyph coverage and mixed Khmer/English rendering
+        run: python -m scripts.check_visual_poster_qa
       - name: Validate PNG dimensions, font rendering, and file size
         run: |
           python - <<'PY'
@@ -132,7 +134,9 @@ jobs:
         if: always()
         with:
           name: visual-live-preview-${{ matrix.edition }}
-          path: out/visual/${{ matrix.edition }}-latest.*
+          path: |
+            out/visual/${{ matrix.edition }}-latest.*
+            out/visual/${{ matrix.edition }}-review-request.json
           retention-days: 3
           if-no-files-found: ignore
 
@@ -146,6 +150,8 @@ jobs:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       VISUAL_NEWS_ENABLED: ${{ vars.VISUAL_NEWS_ENABLED }}
+      # New safety switch defaults OFF until Khmer poster QA is accepted.
+      VISUAL_PUBLICATION_REVIEWED: ${{ vars.VISUAL_PUBLICATION_REVIEWED }}
       CHANNEL: ${{ vars.VISUAL_NEWS_CHANNEL_ID || '@dailynewsagents' }}
       PRIVATE_CHAT: ${{ secrets.TELEGRAM_NEWS_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}
       NEWS_SCHEDULE_CRON: ${{ github.event.schedule }}
@@ -175,8 +181,8 @@ jobs:
               '15 10 * * 5') edition=gadget ;;
               *) echo "::error::Unrecognized scheduled edition"; exit 1 ;;
             esac
-            if [ "$VISUAL_NEWS_ENABLED" != 'true' ]; then
-              echo "Visual news schedule is configured but opt-in is OFF. No post."
+            if [ "$VISUAL_NEWS_ENABLED" != 'true' ] || [ "$VISUAL_PUBLICATION_REVIEWED" != 'true' ]; then
+              echo "Visual news is on editorial hold until QA is reviewed. No Telegram post."
               echo "active=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
