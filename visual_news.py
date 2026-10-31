@@ -103,6 +103,25 @@ def is_approved_domain(host: str, domains: tuple[str, ...]) -> bool:
     return any(host == suffix or host.endswith("." + suffix) for suffix in domains)
 
 
+def rss_excerpt(value: str, limit: int = 260) -> str:
+    """Use whole original publisher sentences; never an arbitrary half-word.
+
+    WordPress appends 'The post ... appeared first on ...' after some RSS
+    summaries. That boilerplate is not news and must not reach a Khmer report.
+    """
+    raw = news_radar.clean(str(value or ""), 950)
+    raw = re.split(r"\\s+The post\\s+", raw, maxsplit=1, flags=re.IGNORECASE)[0].strip()
+    if not raw:
+        return ""
+    if len(raw) <= limit:
+        return raw
+    # Keep a complete sentence only. If unavailable, show attributed headline
+    # and the original article URL instead of a chopped, misleading summary.
+    pieces = [raw.rfind(marker, 0, limit) for marker in ("។", "!", "?", ".")]
+    stop = max(pieces)
+    return raw[:stop + 1].strip() if stop >= 55 else ""
+
+
 def normalize_story(raw: dict, edition: str, now: datetime) -> dict | None:
     """Publisher identity + domain + timezone + freshness checks, not fact-checking."""
     title = clean(str(raw.get("title", "")), 170)
@@ -125,6 +144,12 @@ def normalize_story(raw: dict, edition: str, now: datetime) -> dict | None:
     if parsed_url.scheme != "https" or parsed_url.username or parsed_url.password:
         return None
     host = (parsed_url.hostname or "").lower()
+    # A Khmer-language publisher also reports global news. Keep its declared
+    # /global-news category out of the Cambodia edition instead of mistaking
+    # the language of the headline for Cambodian geographic relevance.
+    if (edition == "cambodia" and source == "Kampuchea Thmey"
+            and re.search(r"/(?:global-news|international-news|world-news)/", parsed_url.path, re.I)):
+        return None
     # Visual editions accept only original publishers. An aggregator link
     # (including a Google News redirect) is NOT an original article link.
     match = DIRECT.get(source)
@@ -132,7 +157,7 @@ def normalize_story(raw: dict, edition: str, now: datetime) -> dict | None:
         return None
     publisher = match[0]
     evidence = "direct"
-    excerpt = clean(str(raw.get("summary", "")), 180)
+    excerpt = rss_excerpt(str(raw.get("summary", "")))
     if edition == "gadget" and source not in visual_sources.GADGET_FEEDS:
         return None
     if edition == "cambodia" and source not in visual_sources.CAMBODIA_FEEDS:
