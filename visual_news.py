@@ -110,7 +110,7 @@ def rss_excerpt(value: str, limit: int = 260) -> str:
     summaries. That boilerplate is not news and must not reach a Khmer report.
     """
     raw = news_radar.clean(str(value or ""), 950)
-    raw = re.split(r"\\s+The post\\s+", raw, maxsplit=1, flags=re.IGNORECASE)[0].strip()
+    raw = re.split(r"\s+The post\s+", raw, maxsplit=1, flags=re.IGNORECASE)[0].strip()
     if not raw:
         return ""
     if len(raw) <= limit:
