@@ -178,7 +178,12 @@ def collect(edition: str, now: datetime, *, limit: int = 3) -> tuple[list[dict],
             logging.warning("Feed unavailable: %s (%s)", name, type(exc).__name__)
     if not available:
         raise RuntimeError("All configured RSS sources unavailable; no report will be published")
-    seen.sort(key=lambda item: item["published"], reverse=True)
+    # Prefer native Khmer headlines for Cambodia; avoids mistranslated
+    # English headlines in real private previews. Still enforce freshness.
+    if edition == "cambodia":
+        seen.sort(key=lambda item: (item["source_language"] == "km", item["published"]), reverse=True)
+    else:
+        seen.sort(key=lambda item: item["published"], reverse=True)
     selected, sources, titles = [], {}, []
     for item in seen:
         if item["id"] in {x["id"] for x in selected}:
