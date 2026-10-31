@@ -18,12 +18,13 @@ import sys
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from urllib.error import HTTPError
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 import cambodia_brief
 import news_radar
 import trending_radar
+import visual_sources
 from visual_quality import (apply_approved_copy, approval_for_slot,
                             read_approvals, review_request,
                             normalize_visual_text)
@@ -45,6 +46,12 @@ TAGS = {
     "gadget": "#GadgetFriday #Phones #Tech",
 }
 DIRECT = {
+    "Khmer Times": ("Khmer Times", ("khmertimeskh.com",)),
+    "CamboJA News": ("CamboJA News", ("cambojanews.com",)),
+    "Phnom Penh Post": ("Phnom Penh Post", ("phnompenhpost.com",)),
+    "Cambodianess": ("Cambodianess", ("cambodianess.com",)),
+    "Kiripost": ("Kiripost", ("kiripost.com",)),
+    "CNA World": ("CNA", ("channelnewsasia.com",)),
     "BBC World": ("BBC News", ("bbc.co.uk", "bbc.com")),
     "BBC Business": ("BBC News", ("bbc.co.uk", "bbc.com")),
     "BBC Science": ("BBC News", ("bbc.co.uk", "bbc.com")),
@@ -68,17 +75,6 @@ DIRECT = {
     "MacRumors": ("MacRumors", ("macrumors.com",)),
     "Android Authority": ("Android Authority", ("androidauthority.com",)),
     "GSMArena": ("GSMArena", ("gsmarena.com",)),
-}
-GADGET_PUBLISHERS = {"macrumors", "android authority", "gsmarena"}
-GLOBAL_PUBLISHERS = set(trending_radar.TRUSTED_GOOGLE_PUBLISHERS)
-LOCAL_PUBLISHERS = set(cambodia_brief.PUBLISHERS)
-GADGET_FEEDS = {
-    "MacRumors": "https://feeds.macrumors.com/MacRumors-All",
-    "Android Authority": "https://www.androidauthority.com/feed/",
-    "GSMArena": "https://www.gsmarena.com/rss-news-reviews.php3",
-    "Google News Gadget": ("https://news.google.com/rss/search?q=" +
-        quote_plus("(Apple OR Samsung OR OnePlus) (phone OR gadget OR laptop) when:7d")
-        + "&hl=en-US&gl=US&ceid=US:en"),
 }
 
 # These schedules map exclusively to the visual workflow; GitHub may be late.
@@ -127,27 +123,17 @@ def normalize_story(raw: dict, edition: str, now: datetime) -> dict | None:
     if parsed_url.scheme != "https" or parsed_url.username or parsed_url.password:
         return None
     host = (parsed_url.hostname or "").lower()
-    indexed = source.startswith("Google News")
-    original = str(raw.get("publisher", "")).casefold().strip()
-    if indexed:
-        if not is_approved_domain(host, ("news.google.com",)):
-            return None
-        allowed = (LOCAL_PUBLISHERS if edition == "cambodia"
-                   else GADGET_PUBLISHERS if edition == "gadget" else GLOBAL_PUBLISHERS)
-        if original not in allowed:
-            return None
-        publisher = (cambodia_brief.PUBLISHERS[original] if edition == "cambodia"
-                     else original.title())
-        evidence = "indexed"
-        excerpt = ""  # Google News snippets often aggregate unrelated headlines.
-    else:
-        match = DIRECT.get(source)
-        if not match or not is_approved_domain(host, match[1]):
-            return None
-        publisher = match[0]
-        evidence = "direct"
-        excerpt = clean(str(raw.get("summary", "")), 180)
-    if edition == "gadget" and publisher.casefold() not in GADGET_PUBLISHERS:
+    # Visual editions accept only original publishers. An aggregator link
+    # (including a Google News redirect) is NOT an original article link.
+    match = DIRECT.get(source)
+    if not match or not is_approved_domain(host, match[1]):
+        return None
+    publisher = match[0]
+    evidence = "direct"
+    excerpt = clean(str(raw.get("summary", "")), 180)
+    if edition == "gadget" and source not in visual_sources.GADGET_FEEDS:
+        return None
+    if edition == "cambodia" and source not in visual_sources.CAMBODIA_FEEDS:
         return None
     digest_id = hashlib.sha256(url.encode("utf-8")).hexdigest()[:24]
     return {
@@ -159,15 +145,17 @@ def normalize_story(raw: dict, edition: str, now: datetime) -> dict | None:
 
 def feeds_for(edition: str) -> list[tuple[str, str]]:
     if edition == "cambodia":
-        return list(cambodia_brief.FEEDS.items())
+        return list(visual_sources.CAMBODIA_FEEDS.items())
     if edition == "gadget":
-        return list(GADGET_FEEDS.items())
+        return list(visual_sources.GADGET_FEEDS.items())
     if edition == "tech":
         return [(name, url) for name, url in news_radar.FEEDS.items() if name in DIRECT]
     if edition == "global":
         groups = ("World", "Business", "Science", "Culture", "Sports")
-        return [(name, url) for category in groups
-                for name, url in trending_radar.FEEDS[category]]
+        return ([(name, url) for category in groups
+                 for name, url in trending_radar.FEEDS[category]
+                 if name in DIRECT and not name.startswith("Google News")]
+                + list(visual_sources.GLOBAL_ADDITIONAL_FEEDS.items()))
     raise ValueError("Invalid edition")
 
 
@@ -201,7 +189,9 @@ def collect(edition: str, now: datetime, *, limit: int = 3) -> tuple[list[dict],
         sources[item["publisher"]] = sources.get(item["publisher"], 0) + 1
         if len(selected) >= limit:
             break
-    return selected, {"working": available, "failed": errors, "eligible": len(seen)}
+    return selected, {"working": available, "failed": errors, "eligible": len(seen),
+                      "source_policy": "direct_original_publisher_only",
+                      "publisher_article_urls": [item["url"] for item in selected]}
 
 
 def contains_khmer(value: str) -> bool:
@@ -383,7 +373,7 @@ def full_caption(items: list[dict], edition: str, now: datetime) -> str:
         heading = html.escape(normalize_visual_text(item["khmer_title"], max_length=180))
         summary = html.escape(normalize_visual_text(item["khmer_summary"], max_length=280))
         url = html.escape(item["url"], quote=True)
-        provenance = "តំណតាម Google News" if item["source_kind"] == "indexed" else "អត្ថបទដើម"
+        provenance = "អត្ថបទដើមពីសារព័ត៌មាន"
         lines.extend(["", f"<b>{index}. {heading}</b>", summary,
                       f"📰 {publisher} · {provenance} · រាយការណ៍",
                       f'🔗 <a href="{url}">អានប្រភពដើម / ប្រភពដែលបានយោង</a>'])
@@ -440,9 +430,6 @@ def send_edition(edition: str, now: datetime, items: list[dict],
     record = current["deliveries"].setdefault(slot, {"destinations": {}})
     text = full_caption(items, edition, now)
     caption = short_caption(items, edition, news_radar.report_timestamp(now))
-    if test_mode:
-        text = "🧪 <b>TEST ONLY · មិនមែនការផ្សាយព័ត៌មានពិត</b>\n" + text
-        caption = "🧪 TEST ONLY / សាកល្បង\n" + caption
     errors = 0
     for kind, chat_id in destinations.items():
         if not chat_id:
@@ -555,7 +542,7 @@ def execute(edition: str, *, dry_run: bool, test_mode: bool,
             logging.info("Visual edition already delivered to all destinations in %s", slot)
             return 0
     stories, health = collect(edition, now)
-    logging.info("Edition=%s eligible=%d selected=%d sources=%d failed=%d",
+    logging.info("LIVE ORIGINAL RSS: edition=%s eligible=%d selected=%d sources=%d failed=%d",
                  edition, health["eligible"], len(stories), len(health["working"]), len(health["failed"]))
     if not stories:
         logging.warning("No qualifying source-backed stories; skip poster and Telegram")
@@ -583,8 +570,6 @@ def execute(edition: str, *, dry_run: bool, test_mode: bool,
     output.mkdir(parents=True, exist_ok=True)
     from visual_poster import render_poster
     stamp = news_radar.report_timestamp(now)
-    if test_mode:
-        stamp = "DEMO / TEST · " + stamp
     png = render_poster(edition, stories, stamp,
                         output / f"{edition}-latest.png")
     report = full_caption(stories, edition, now)
