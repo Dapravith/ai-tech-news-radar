@@ -27,7 +27,7 @@ original publisher, article URL, feed URL and publication timestamp.
 
 | Edition | Planned Cambodia publication | Direct original RSS sources |
 | --- | --- | --- |
-| 🇰🇭 Cambodia visual | 09:05, 13:05, 19:05 daily | Khmer: Koh Santepheap, Kampuchea Thmey. English: Khmer Times, CamboJA News, Cambodianess, Phnom Penh Post, Kiripost |
+| 🇰🇭 Cambodia visual | 09:05, 13:05, 19:05 daily | Khmer: Koh Santepheap, Kampuchea Thmey. English: CamboJA News; other publisher endpoints temporarily disabled after live RSS failures |
 | 🌍 Global visual | 10:25 daily | BBC, Guardian, DW, CNA |
 | 💻 AI & Software visual | 16:25 daily | Official OpenAI, GitHub, Kubernetes, Google AI, Cloudflare, Spring, Python, Hugging Face, NCSC feeds |
 | 📱 Gadget Friday | Friday 17:15 | MacRumors, Android Authority, GSMArena |
