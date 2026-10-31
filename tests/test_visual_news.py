@@ -233,8 +233,11 @@ class DeliveryTests(unittest.TestCase):
         slot = v.slot_for("tech", NOW)
         v.save_state({"deliveries": {slot: {"destinations": {"channel": {
             "photo_sent": True, "text_sent": False, "report": "original sourced report",
+            "stories": [self.item["id"]],
         }}}}}, self.state)
         with (patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "fake", "NEWS_SCHEDULE_CRON": ""}),
+              patch.object(v, "approval_for_slot",
+                           return_value={"stories": [{"id": self.item["id"]}]}),
               patch.object(v, "telegram_api", return_value=678) as api,
               patch.object(v, "collect") as collect):
             status = v.execute("tech", dry_run=False, test_mode=False,
@@ -248,18 +251,21 @@ class DeliveryTests(unittest.TestCase):
             self.assertTrue(v.read_state(self.state)["deliveries"][slot]
                             ["destinations"]["channel"]["text_sent"])
 
-    def test_public_poster_requires_khmer_when_enabled(self):
+    def test_unreviewed_public_english_story_cannot_publish(self):
+        # The stronger editorial gate now blocks public posts before calling
+        # an AI model or even collecting headlines. Khmer script alone was
+        # never sufficient evidence of a correct translation.
         with (patch.dict(os.environ, {"VISUAL_REQUIRE_KHMER": "true",
                                       "TELEGRAM_BOT_TOKEN": "fake",
                                       "NEWS_SCHEDULE_CRON": "",
                                       "OPENROUTER_API_KEY": ""}),
-              patch.object(v, "collect", return_value=(
-                  [self.item], {"eligible": 1, "working": ["GitHub"], "failed": []})),
+              patch.object(v, "collect") as collect,
               patch.object(v, "send_edition") as send):
-            with self.assertRaisesRegex(RuntimeError, "Khmer translation unavailable"):
+            with self.assertRaisesRegex(ValueError, "no human-reviewed"):
                 v.execute("tech", dry_run=False, test_mode=False,
                           channel="@example", private_chat="", now=NOW,
                           state_path=self.state, output=Path(self.tmp.name) / "out")
+            collect.assert_not_called()
             send.assert_not_called()
 
     def test_delayed_scheduled_run_does_not_collect_or_send(self):
@@ -282,6 +288,8 @@ class DeliveryTests(unittest.TestCase):
         }}}, self.state)
         new_item = dict(self.item, id="brand-new-story")
         with (patch.dict(os.environ, {"NEWS_SCHEDULE_CRON": "", "OPENROUTER_API_KEY": ""}),
+              patch.object(v, "approval_for_slot",
+                           return_value={"stories": [{"id": "old-digest"}]}),
               patch.object(v, "collect", return_value=(
                   [new_item], {"eligible": 1, "working": ["GitHub"], "failed": []})),
               patch.object(v, "send_edition") as send):

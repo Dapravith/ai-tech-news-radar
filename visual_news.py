@@ -24,6 +24,9 @@ from urllib.request import Request, urlopen
 import cambodia_brief
 import news_radar
 import trending_radar
+from visual_quality import (apply_approved_copy, approval_for_slot,
+                            read_approvals, review_request,
+                            normalize_visual_text)
 
 ROOT = Path(__file__).resolve().parent
 STATE_FILE = ROOT / "state" / "visual_seen.json"
@@ -105,6 +108,12 @@ def is_approved_domain(host: str, domains: tuple[str, ...]) -> bool:
 def normalize_story(raw: dict, edition: str, now: datetime) -> dict | None:
     """Publisher identity + domain + timezone + freshness checks, not fact-checking."""
     title = clean(str(raw.get("title", "")), 170)
+    try:
+        # Skip original headlines that cannot be faithfully drawn as a Khmer/
+        # English text-only poster (e.g. unsupported symbols/scripts).
+        normalize_visual_text(title, max_length=170)
+    except ValueError:
+        return None
     url = news_radar.normalize_url(str(raw.get("url", "")))
     published = raw.get("published")
     source = str(raw.get("source", "")).strip()
@@ -268,6 +277,13 @@ def apply_khmer_translation(items: list[dict]) -> None:
             headline = clean(str(translated.get("title_km", "")), 160)
             snippet = clean(str(translated.get("summary_km", "")), 210)
             if not contains_khmer(headline) or len(headline) < 5:
+                continue
+            try:
+                headline = normalize_visual_text(headline, require_khmer=True, max_length=160)
+                if snippet:
+                    snippet = normalize_visual_text(snippet, max_length=210)
+            except ValueError:
+                logging.warning("Discarded Khmer translation with invalid or unsupported characters")
                 continue
             evidence = original["title"] + " " + original["excerpt"]
             produced_numbers = extract_numbers(headline + " " + snippet)
@@ -512,12 +528,23 @@ def execute(edition: str, *, dry_run: bool, test_mode: bool,
             if delay is None or delay > 90:
                 raise RuntimeError(f"Visual news job is too late ({delay}m); do not publish stale edition")
     slot = slot_for(edition, now)
+    approval = None
     if not dry_run and not test_mode:
+        # Public news must be approved *per story and publication slot*,
+        # not just by toggling a global workflow variable.
+        approval = approval_for_slot(read_approvals(), slot, edition)
         intended = ({"channel": channel} if channel else {})
         if private_chat:
             intended["personal"] = private_chat
         if not intended:
             raise ValueError("No Telegram destination configured")
+        # Existing partial state may only resume the same human-approved story IDs.
+        pending = read_state(state_path)["deliveries"].get(slot, {}).get("destinations", {})
+        approved_ids = [x["id"] for x in approval["stories"]]
+        for stage in pending.values():
+            if stage.get("photo_sent") and not stage.get("text_sent"):
+                if stage.get("stories") != approved_ids:
+                    raise ValueError("Pending Telegram message lacks matching human editorial approval")
         if resume_pending(edition, now, state_path, intended):
             return 1
         current = read_state(state_path)["deliveries"].get(slot, {}).get("destinations", {})
@@ -540,7 +567,12 @@ def execute(edition: str, *, dry_run: bool, test_mode: bool,
                 original_ids = stage.get("stories")
                 if not isinstance(original_ids, list) or original_ids != selected_ids:
                     raise RuntimeError("Visual story selection changed after partial delivery; reconcile manually")
-    apply_khmer_translation(stories)
+    if approval is not None:
+        # Replace model output entirely with the exact human-reviewed text.
+        # Any changed headline, source URL, article date or selection blocks sending.
+        apply_approved_copy(stories, approval)
+    else:
+        apply_khmer_translation(stories)
     if (not dry_run and not test_mode and
             os.getenv("VISUAL_REQUIRE_KHMER", "").lower() == "true" and
             any(not contains_khmer(i["khmer_title"]) for i in stories)):
@@ -554,6 +586,12 @@ def execute(edition: str, *, dry_run: bool, test_mode: bool,
                         output / f"{edition}-latest.png")
     report = full_caption(stories, edition, now)
     (output / f"{edition}-latest.html").write_text(report + "\n", encoding="utf-8")
+    if dry_run or test_mode:
+        request = review_request(edition, slot, stories)
+        (output / f"{edition}-review-request.json").write_text(
+            json.dumps(request, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8"
+        )
     if dry_run:
         logging.info("DRY RUN: poster=%s, caption=%s; no Telegram delivery", png, edition)
         return 0
