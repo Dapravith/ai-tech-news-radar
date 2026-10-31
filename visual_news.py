@@ -46,6 +46,8 @@ TAGS = {
     "gadget": "#GadgetFriday #Phones #Tech",
 }
 DIRECT = {
+    "Koh Santepheap": ("Koh Santepheap", ("kohsantepheapdaily.com.kh",)),
+    "Kampuchea Thmey": ("Kampuchea Thmey", ("kampucheathmey.com",)),
     "Khmer Times": ("Khmer Times", ("khmertimeskh.com",)),
     "CamboJA News": ("CamboJA News", ("cambojanews.com",)),
     "Phnom Penh Post": ("Phnom Penh Post", ("phnompenhpost.com",)),
