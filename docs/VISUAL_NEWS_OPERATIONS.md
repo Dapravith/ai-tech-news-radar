@@ -5,12 +5,21 @@ collectors. Its output is an 1080×1350 PNG poster + a short Telegram photo
 caption + a full, independently readable Telegram text message linking to each
 source. It does not replace existing Cambodia, world or tech publishers.
 
+## Mandatory poster-quality hold (October 31, 2026)
+
+The previous private Khmer poster had missing glyph squares and awkward Khmer
+headlines. **Do not enable public visual publishing until you complete**
+[mandatory editorial QA](VISUAL_POSTER_EDITORIAL_QA.md). In addition to
+both repository variables, every source-bound story now requires a specific
+human-reviewed Khmer title and summary. Unreviewed AI translations only appear
+in private tests and are never sufficient for public publication.
+
 ## Status
 
 Code is implemented in `visual_news.py`, `visual_poster.py`,
 `scripts/visual_fixture_preview.py`, `tests/test_visual_news.py`, and
 `.github/workflows/visual-news.yml`. Production cron expressions are present,
-but `VISUAL_NEWS_ENABLED` must explicitly equal `true` in GitHub Actions
+but BOTH `VISUAL_NEWS_ENABLED` and `VISUAL_PUBLICATION_REVIEWED` must explicitly equal `true` in GitHub Actions
 **repository variables**. The default is **off**. CI previews never use a
 Telegram bot token or an AI translation credential.
 
@@ -113,8 +122,9 @@ when qualifying articles are found.
 5. For an actual **private** test choose **dry_run=false,
    test_private=true**. The poster and full report are labeled TEST, and
    no state is recorded. Manual public posts are intentionally disallowed.
-6. Only after checking Khmer quality and source links, set Actions repository
-   variable `VISUAL_NEWS_ENABLED=true`. Set optional repository variable
+6. Only after checking Khmer quality and source links, and adding exact article
+   approvals, set Actions repository variables `VISUAL_NEWS_ENABLED=true` and
+   `VISUAL_PUBLICATION_REVIEWED=true`. Set optional repository variable
    `VISUAL_NEWS_CHANNEL_ID=@dailynewsagents`; otherwise that channel is the
    workflow's default. Existing text-only pipelines remain active.
 7. Observe a scheduled job, verify a photo and the companion text, and inspect
