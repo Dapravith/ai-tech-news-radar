@@ -360,7 +360,8 @@ def merge_state(current: dict, snapshot: dict) -> dict:
 def short_caption(items: list[dict], edition: str, stamp: str) -> str:
     text = [f"📰 {NAMES[edition]} · {stamp}", ""]
     for n, item in enumerate(items, 1):
-        title = clean(item["khmer_title"], 105)
+        # Never truncate inside a Khmer consonant/dependent-vowel sequence.
+        title = normalize_visual_text(item["khmer_title"], max_length=170)
         text.append(f"{n}. {title} — {clean(item['publisher'], 35)}")
     text.extend(["", "🔗 តំណប្រភពដើមមាននៅក្នុងសារបន្ទាប់។",
                  "⚠️ សង្ខេបព័ត៌មាន មិនមែនការផ្ទៀងផ្ទាត់ឯករាជ្យទេ។"])
@@ -377,8 +378,10 @@ def full_caption(items: list[dict], edition: str, now: datetime) -> str:
              "🔍 <i>សង្ខេបពីប្រភពព័ត៌មានដែលអាចតាមដានបាន មិនមែនជាការផ្ទៀងផ្ទាត់ឯករាជ្យ។</i>"]
     for index, item in enumerate(items, 1):
         publisher = html.escape(clean(item["publisher"], 55))
-        heading = html.escape(clean(item["khmer_title"], 160))
-        summary = html.escape(clean(item["khmer_summary"], 220))
+        # Use the exact reviewed copy in full. Generic clean() truncation
+        # can cut Khmer graphemes and silently alter editorial wording.
+        heading = html.escape(normalize_visual_text(item["khmer_title"], max_length=180))
+        summary = html.escape(normalize_visual_text(item["khmer_summary"], max_length=280))
         url = html.escape(item["url"], quote=True)
         provenance = "តំណតាម Google News" if item["source_kind"] == "indexed" else "អត្ថបទដើម"
         lines.extend(["", f"<b>{index}. {heading}</b>", summary,
