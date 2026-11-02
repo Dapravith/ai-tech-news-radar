@@ -84,6 +84,10 @@
     "2026-11-01": {
       "delivered": true,
       "ids": []
+    },
+    "2026-11-02": {
+      "delivered": true,
+      "ids": []
     }
   },
   "software": {
@@ -193,6 +197,10 @@
       "ids": []
     },
     "2026-11-01": {
+      "delivered": true,
+      "ids": []
+    },
+    "2026-11-02": {
       "delivered": true,
       "ids": []
     }
