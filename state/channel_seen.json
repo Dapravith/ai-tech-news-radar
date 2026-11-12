@@ -128,6 +128,10 @@
     "2026-11-11": {
       "delivered": true,
       "ids": []
+    },
+    "2026-11-12": {
+      "delivered": true,
+      "ids": []
     }
   },
   "software": {
@@ -294,6 +298,12 @@
       "ids": [
         "bf3b76431e18449fd8e634",
         "f0fc30384fec2ecc4dbc08"
+      ]
+    },
+    "2026-11-12": {
+      "delivered": true,
+      "ids": [
+        "02bfed5e7aa817ea9dcb99"
       ]
     }
   }
