@@ -138,6 +138,10 @@
       "ids": [
         "eaf76493fdb0b4bfceb5ae"
       ]
+    },
+    "2026-11-14": {
+      "delivered": true,
+      "ids": []
     }
   },
   "software": {
@@ -317,6 +321,13 @@
       "ids": [
         "84ec87286cb35a64f463f0",
         "eaf76493fdb0b4bfceb5ae"
+      ]
+    },
+    "2026-11-14": {
+      "delivered": true,
+      "ids": [
+        "83270260bb0f21b115a2dc",
+        "a443b3b05538516102c126"
       ]
     }
   }
