@@ -189,6 +189,10 @@
         "75859cc12e7735687690bf",
         "eae23911357ea50d977536"
       ]
+    },
+    "2026-11-25": {
+      "delivered": true,
+      "ids": []
     }
   },
   "software": {
@@ -429,6 +433,12 @@
       "delivered": true,
       "ids": [
         "eae23911357ea50d977536"
+      ]
+    },
+    "2026-11-25": {
+      "delivered": true,
+      "ids": [
+        "ba666bacce57d97d6c7620"
       ]
     }
   }
